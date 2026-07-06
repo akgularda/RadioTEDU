@@ -101,6 +101,10 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         </div>
 
         <div className="control-strip">
+          <button type="button" onClick={() => control('/api/control/start')}>
+            <Play size={15} />
+            Run Air
+          </button>
           <button type="button" onClick={() => control('/api/control/stop')}>
             <Square size={15} />
             Stop

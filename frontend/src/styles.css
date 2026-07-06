@@ -43,10 +43,52 @@ button {
 
 .public-shell {
   background: #f8f9fb;
+  align-items: flex-start;
 }
 
 .public-card {
   width: min(100%, 420px);
+}
+
+.public-page {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 14px;
+}
+
+.public-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #182132;
+}
+
+.radiotedu-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: #020617;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.public-brand strong,
+.public-brand span {
+  display: block;
+  line-height: 1.15;
+}
+
+.public-brand strong {
+  font-size: 18px;
+}
+
+.public-brand span {
+  margin-top: 2px;
+  color: #68758a;
+  font-size: 12px;
 }
 
 .station-cover {
@@ -250,7 +292,7 @@ button {
 .control-strip {
   padding: 0 16px 12px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   border-bottom: 1px solid #edf0f4;
 }
@@ -262,6 +304,15 @@ button {
   border-radius: 6px;
   color: #68758a;
   font-size: 12px;
+}
+
+.public-actions {
+  padding: 12px 16px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.public-actions .outline-button {
+  width: 100%;
 }
 
 .control-strip button {
@@ -595,5 +646,9 @@ button {
   .metric-cell {
     padding-left: 12px;
     padding-right: 12px;
+  }
+
+  .control-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

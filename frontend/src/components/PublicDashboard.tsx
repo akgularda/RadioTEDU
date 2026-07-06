@@ -1,4 +1,4 @@
-import { Play, Radio } from 'lucide-react';
+import { MessageSquare, Play, Radio } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { postPublicSession, type PublicStatusResponse } from '../api';
@@ -40,12 +40,21 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
 
   return (
     <main className="app-shell public-shell">
+      <div className="public-page">
+        <header className="public-brand">
+          <div className="radiotedu-mark">RT</div>
+          <div>
+            <strong>RadioTEDU</strong>
+            <span>AI Radio</span>
+          </div>
+        </header>
+
       <section className="station-card public-card" aria-label="RadioTEDU public channel">
         <img className="station-cover" src={cover} alt="" />
         <div className="station-header">
           <div className="station-title-block">
             <h1>{status.channel.name}</h1>
-            <p>AI radio from TED University</p>
+            <p>by {status.channel.host_model || 'Qwen Radio Host'}</p>
           </div>
           <div className={status.online ? 'public-status public-status--live' : 'public-status'}>
             <Radio size={15} />
@@ -78,15 +87,21 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
         <div className="metric-grid">
           <Metric label="Current Listeners" value={String(status.metrics.current_listeners)} />
           <Metric label="Popularity" value={formatPercent(status.metrics.popularity)} />
-          <Metric label="Stream" value={status.stream.status === 'configured' ? 'Ready' : 'No data'} />
           <Metric label="Avg Listening Session" value={status.metrics.average_session || 'No data'} />
+        </div>
+
+        <div className="public-actions">
+          <button className="outline-button" type="button" onClick={() => window.location.href = 'mailto:hello@radiotedu.com'}>
+            <MessageSquare size={17} />
+            Message
+          </button>
         </div>
 
         <ScheduleSection program={currentProgram} />
         <TopSongs songs={status.top_songs} />
         <GenreBars genres={status.top_genres} />
-        <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} />
       </section>
+      </div>
     </main>
   );
 }
@@ -176,33 +191,6 @@ function GenreBars({ genres }: { genres: PublicStatusResponse['top_genres'] }) {
         </>
       ) : (
         <p className="muted">No genre data yet.</p>
-      )}
-    </section>
-  );
-}
-
-function ProgramsPanel({ programs, currentProgramId }: { programs: PublicStatusResponse['programs']; currentProgramId: string | null }) {
-  return (
-    <section className="section-block">
-      <div className="section-heading">
-        <span>Programs</span>
-        <span>{programs.length}</span>
-      </div>
-      {programs.length ? (
-        <div className="program-list">
-          {programs.map((program) => (
-            <article key={program.id} className={program.id === currentProgramId ? 'program-item program-item--active' : 'program-item'}>
-              <img src={program.cover_path || '/static/generated/covers/radiotedu_station.png'} alt="" />
-              <div>
-                <strong>{program.name}</strong>
-                <span>{program.vibe || 'RadioTEDU'}</span>
-                <small>{program.start_time}-{program.end_time}</small>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="muted">Program schedule will appear when the broadcast computer syncs.</p>
       )}
     </section>
   );
