@@ -1,0 +1,14 @@
+.env
+.venv/
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.log
+.pytest_cache/
+data/radiotedu.db
+data/liquidsoap/queue.m3u
+logs/
+backend/static/generated/tts/*.wav
+backend/static/generated/tts/*.txt
+backend/static/generated/clips/*
