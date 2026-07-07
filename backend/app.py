@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .art.cover_generator import generate_covers
 from .config import Settings, ensure_runtime_dirs
 from .database import connect, init_db, log_event, now_iso, rows_to_dicts
-from .liquidsoap import render_liquidsoap_config
+from .liquidsoap import liquidsoap_status, render_liquidsoap_config, start_liquidsoap, stop_liquidsoap
 from .llm import ollama_runtime_status
 from .models import ListenerFeedbackRequest, ProgramUpdateRequest, PublicSessionRequest, SayRequest, SearchRequest
 from .music_library import scan_music
@@ -191,6 +191,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def liquidsoap_render() -> dict:
         return render_liquidsoap_config(settings)
 
+    @app.get("/api/liquidsoap/status")
+    def liquidsoap_status_endpoint() -> dict:
+        return liquidsoap_status(settings)
+
+    @app.post("/api/liquidsoap/start")
+    def liquidsoap_start_endpoint() -> dict:
+        result = start_liquidsoap(settings)
+        with connect(settings) as conn:
+            log_event(conn, "info" if result.get("started") else "warning", "Liquidsoap start requested.", result)
+            conn.commit()
+        return result
+
+    @app.post("/api/liquidsoap/stop")
+    def liquidsoap_stop_endpoint() -> dict:
+        result = stop_liquidsoap(settings)
+        with connect(settings) as conn:
+            log_event(conn, "info", "Liquidsoap stop requested.", result)
+            conn.commit()
+        return result
+
     return app
 
 
@@ -237,6 +257,7 @@ def build_status(settings: Settings, agent: RadioAgent, orchestrator: Autonomous
         "observability": observability(settings, agent),
         "logs": recent_logs(settings),
         "health": health(settings, agent),
+        "liquidsoap": liquidsoap_status(settings),
         "setup": {
             "has_music": has_music,
             "message": "" if has_music else "No music library found. Add audio files to data/music and click Rescan.",

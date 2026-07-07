@@ -65,8 +65,11 @@ class Settings:
     liquidsoap_enabled: bool = False
     liquidsoap_queue_path: str = "data/liquidsoap/queue.m3u"
     liquidsoap_script_path: str = "data/liquidsoap/radiotedu.liq"
+    liquidsoap_command: str = "liquidsoap"
     liquidsoap_host: str = "127.0.0.1"
     liquidsoap_port: int = 8001
+    liquidsoap_mount: str = "/ai"
+    liquidsoap_icecast_password: str = "hackme"
     public_dashboard_enabled: bool = False
     public_dashboard_route: str = "/ai"
     public_stream_url: str = ""
@@ -119,8 +122,11 @@ class Settings:
             "liquidsoap_enabled": "LIQUIDSOAP_ENABLED",
             "liquidsoap_queue_path": "LIQUIDSOAP_QUEUE_PATH",
             "liquidsoap_script_path": "LIQUIDSOAP_SCRIPT_PATH",
+            "liquidsoap_command": "LIQUIDSOAP_COMMAND",
             "liquidsoap_host": "LIQUIDSOAP_HOST",
             "liquidsoap_port": "LIQUIDSOAP_PORT",
+            "liquidsoap_mount": "LIQUIDSOAP_MOUNT",
+            "liquidsoap_icecast_password": "LIQUIDSOAP_ICECAST_PASSWORD",
             "public_dashboard_enabled": "PUBLIC_DASHBOARD_ENABLED",
             "public_dashboard_route": "PUBLIC_DASHBOARD_ROUTE",
             "public_stream_url": "PUBLIC_STREAM_URL",

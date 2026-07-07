@@ -166,6 +166,19 @@ const emptyStatus: StatusResponse = {
     draft_count: 0,
     self_review: 'Self-review: no recent plays yet.',
   },
+  liquidsoap: {
+    enabled: true,
+    command: 'liquidsoap',
+    command_found: false,
+    command_path: null,
+    running: false,
+    pid: null,
+    rendered: true,
+    script_path: 'data/liquidsoap/radiotedu.liq',
+    queue_path: 'data/liquidsoap/queue.m3u',
+    mount: '/ai',
+    icecast_url: 'http://127.0.0.1:8001/ai',
+  },
   setup: {
     has_music: false,
     message: 'No music library found. Add audio files to data/music and click Rescan.',
@@ -192,6 +205,9 @@ describe('Dashboard', () => {
     expect(screen.getByText('Autonomy Ops')).toBeInTheDocument();
     expect(screen.getByText('Ollama runtime is unreachable.')).toBeInTheDocument();
     expect(screen.getByText('Restart Ollama')).toBeInTheDocument();
+    expect(screen.getByText('Air Output')).toBeInTheDocument();
+    expect(screen.getByText('/ai')).toBeInTheDocument();
+    expect(screen.getByText('Start Icecast Air')).toBeInTheDocument();
     expect(screen.getByText('Weather')).toBeInTheDocument();
     expect(screen.getByText('No weather data.')).toBeInTheDocument();
     expect(screen.getByText('Runtime Watch')).toBeInTheDocument();

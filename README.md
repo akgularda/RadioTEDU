@@ -265,19 +265,24 @@ FFPLAY_PATH=ffplay
 PLAYBACK_BACKEND=mpv
 ```
 
-## Liquidsoap
+## Liquidsoap And Icecast
 
-RadioTEDU can render a Liquidsoap playlist and config without changing the one-channel model:
+RadioTEDU can run the local admin dashboard as the control app while Liquidsoap streams the actual audio to Icecast at the `/ai` mount:
 
 ```env
-LIQUIDSOAP_ENABLED=false
+PLAYBACK_BACKEND=liquidsoap
+LIQUIDSOAP_ENABLED=true
 LIQUIDSOAP_QUEUE_PATH=data/liquidsoap/queue.m3u
 LIQUIDSOAP_SCRIPT_PATH=data/liquidsoap/radiotedu.liq
+LIQUIDSOAP_COMMAND=liquidsoap
 LIQUIDSOAP_HOST=127.0.0.1
 LIQUIDSOAP_PORT=8001
+LIQUIDSOAP_MOUNT=/ai
+LIQUIDSOAP_ICECAST_PASSWORD=hackme
+PUBLIC_STREAM_URL=http://127.0.0.1:8001/ai
 ```
 
-Generate the files from the API:
+Generate the Liquidsoap files from the API or from the admin dashboard `Air Output` panel:
 
 ```bash
 python - <<'PY'
@@ -287,7 +292,17 @@ print(render_liquidsoap_config(Settings.from_env()))
 PY
 ```
 
-When `PLAYBACK_BACKEND=liquidsoap`, queued audio paths are appended to the Liquidsoap playlist for an external Liquidsoap process to stream.
+When `PLAYBACK_BACKEND=liquidsoap`, queued TTS announcements and real track paths are appended to the Liquidsoap playlist for the Liquidsoap process to stream. Install and run Icecast separately with a matching source password and port, then use `Start Icecast Air` from the admin dashboard. If Liquidsoap is not installed, the admin panel shows it as missing instead of pretending the stream is live.
+
+For `radiotedu.com/ai`, the broadcast computer should push public snapshots to the website server:
+
+```env
+PUBLIC_SYNC_URL=https://radiotedu.com/api/public/snapshot
+PUBLIC_SYNC_TOKEN=change-this-shared-secret
+PUBLIC_STREAM_URL=https://stream.radiotedu.com/ai
+```
+
+The website server renders those snapshots at `https://radiotedu.com/ai` without exposing the broadcast computer, local file paths, logs, or admin controls. `PUBLIC_STREAM_URL` should point to the public Icecast stream URL, which can use the Icecast `/ai` mount on a stream subdomain or port.
 
 ## Cover Art
 
@@ -316,7 +331,3 @@ Edits are recorded in `schedule_revisions`.
 ## Observability
 
 The dashboard includes Runtime Watch: announcement prebuffer readiness, uptime, generated clips, recent errors, restart count, and current playback state. These values come from real SQLite/runtime state, not invented analytics.
-
-## Future Streaming
-
-The playback abstraction leaves room for later Liquidsoap or Icecast integration without changing the one-channel data model.

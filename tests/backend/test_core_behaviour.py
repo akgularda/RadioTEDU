@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.config import Settings
 from backend.database import connect, init_db
+from backend.liquidsoap import render_liquidsoap_config
 from backend.llm import build_user_prompt, choose_track_with_llm, ollama_runtime_status
 from backend.music_library import iter_audio_files, scan_music
 from backend.tts.dummy_tts import DummyTTSProvider
@@ -183,6 +184,32 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertTrue(payload["setup"]["has_music"])
             self.assertEqual("", payload["setup"]["message"])
             self.assertEqual("Idle — ready to start RadioTEDU.", payload["now_playing"]["title"])
+
+    def test_liquidsoap_config_streams_to_ai_mount_and_status_is_exposed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.liquidsoap_enabled = True
+            settings.playback_backend = "liquidsoap"
+            settings.liquidsoap_queue_path = str(root / "queue.m3u")
+            settings.liquidsoap_script_path = str(root / "radiotedu.liq")
+            settings.liquidsoap_host = "icecast.example"
+            settings.liquidsoap_port = 8010
+            settings.liquidsoap_mount = "/ai"
+            settings.liquidsoap_icecast_password = "secret"
+
+            rendered = render_liquidsoap_config(settings)
+            script = (root / "radiotedu.liq").read_text(encoding="utf-8")
+
+            self.assertEqual("/ai", rendered["mount"])
+            self.assertEqual("http://icecast.example:8010/ai", rendered["icecast_url"])
+            self.assertIn('mount="/ai"', script)
+            self.assertIn('password="secret"', script)
+            self.assertNotIn("radiotedu.mp3", script)
+
+            payload = TestClient(create_app(settings)).get("/api/status").json()
+            self.assertEqual("/ai", payload["liquidsoap"]["mount"])
+            self.assertEqual("http://icecast.example:8010/ai", payload["liquidsoap"]["icecast_url"])
 
     def test_status_does_not_show_live_when_playback_is_idle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

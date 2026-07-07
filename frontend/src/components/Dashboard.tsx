@@ -124,6 +124,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         <GenreBars genres={status.top_genres} />
         <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
         <QueuePanel queue={status.queue} />
+        <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
         <StrategyPanel orchestrator={status.orchestrator} onCommand={control} />
         <AutonomyOps incidents={status.incidents} tasks={status.autonomous_tasks} />
         <ListenerNotes messages={status.listener_messages} />
@@ -256,6 +257,55 @@ function ProgramsPanel({
             </div>
           </article>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function AirOutputPanel({
+  liquidsoap,
+  onCommand,
+}: {
+  liquidsoap: StatusResponse['liquidsoap'];
+  onCommand: (path: string, body?: unknown) => Promise<void>;
+}) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Air Output</span>
+        <span>{liquidsoap.running ? 'Streaming' : liquidsoap.command_found ? 'Ready' : 'Missing'}</span>
+      </div>
+      <div className="health-grid">
+        <div>
+          <span>Icecast Mount</span>
+          <strong>{liquidsoap.mount}</strong>
+        </div>
+        <div>
+          <span>Stream URL</span>
+          <strong>{liquidsoap.icecast_url}</strong>
+        </div>
+        <div>
+          <span>Liquidsoap</span>
+          <strong>{liquidsoap.command_found ? liquidsoap.command : 'Not installed'}</strong>
+        </div>
+        <div>
+          <span>Queue</span>
+          <strong>{liquidsoap.rendered ? 'Rendered' : 'Not rendered'}</strong>
+        </div>
+      </div>
+      <div className="strategy-actions">
+        <button type="button" onClick={() => onCommand('/api/liquidsoap/render')}>
+          <RefreshCw size={15} />
+          Render Config
+        </button>
+        <button type="button" onClick={() => onCommand('/api/liquidsoap/start')}>
+          <Play size={15} />
+          Start Icecast Air
+        </button>
+        <button type="button" onClick={() => onCommand('/api/liquidsoap/stop')}>
+          <Square size={15} />
+          Stop Icecast Air
+        </button>
       </div>
     </section>
   );

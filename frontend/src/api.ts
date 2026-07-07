@@ -149,6 +149,20 @@ export interface RuntimeObservability {
   playback_now: PlaybackItem;
 }
 
+export interface LiquidsoapState {
+  enabled: boolean;
+  command: string;
+  command_found: boolean;
+  command_path: string | null;
+  running: boolean;
+  pid: number | null;
+  rendered: boolean;
+  script_path: string;
+  queue_path: string;
+  mount: string;
+  icecast_url: string;
+}
+
 export interface SetupState {
   has_music: boolean;
   message: string;
@@ -183,6 +197,7 @@ export interface StatusResponse {
   health: SystemHealth;
   observability: RuntimeObservability;
   orchestrator: OrchestratorState;
+  liquidsoap: LiquidsoapState;
   setup: SetupState;
 }
 
