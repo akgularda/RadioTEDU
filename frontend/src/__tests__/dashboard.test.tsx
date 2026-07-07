@@ -480,6 +480,16 @@ describe('Dashboard', () => {
     fetchMock.mockRestore();
   });
 
+  it('organizes admin panels as a compact broadcast operations workspace', () => {
+    render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
+
+    const operations = screen.getByLabelText('Broadcast operations');
+    expect(operations).toHaveClass('admin-panel-deck');
+    expect(operations).toContainElement(screen.getByText('Air Readiness'));
+    expect(operations).toContainElement(screen.getByText('Air Output'));
+    expect(operations).toContainElement(screen.getByText('Runtime Watch'));
+  });
+
   it('sends program edits through the API', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);

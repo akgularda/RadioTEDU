@@ -271,33 +271,35 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
           </button>
         </div>
 
-        <ScheduleSection program={currentProgram} />
-        <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
-        {editingProgram && programDraft ? (
-          <ProgramEditPanel
-            program={editingProgram}
-            draft={programDraft}
-            onChange={updateProgramDraft}
-            onSubmit={submitProgramEdit}
-            onCancel={() => {
-              setEditingProgram(null);
-              setProgramDraft(null);
-            }}
-          />
-        ) : null}
-        <QueuePanel queue={status.queue} />
-        <AirReadinessPanel readiness={status.air_readiness} />
-        <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
-        <TtsPanel health={status.health.tts_runtime} currentProgramId={currentProgram?.id || null} onCommand={control} />
-        <MaintenancePanel maintenance={status.maintenance} watchdog={status.watchdog} onCommand={control} />
-        <MusicLibraryPanel library={status.music_library} />
-        <ConfigurationPanel configuration={status.configuration} />
-        <WebsiteSyncPanel sync={status.website_sync} />
-        <StrategyPanel orchestrator={status.orchestrator} onCommand={control} />
-        <AutonomyOps incidents={status.incidents} tasks={status.autonomous_tasks} />
-        <RuntimeWatch observability={status.observability} />
-        <SystemHealth health={status.health} />
-        <LogPanel logs={status.logs} />
+        <div className="admin-panel-deck" aria-label="Broadcast operations">
+          <ScheduleSection program={currentProgram} />
+          <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
+          {editingProgram && programDraft ? (
+            <ProgramEditPanel
+              program={editingProgram}
+              draft={programDraft}
+              onChange={updateProgramDraft}
+              onSubmit={submitProgramEdit}
+              onCancel={() => {
+                setEditingProgram(null);
+                setProgramDraft(null);
+              }}
+            />
+          ) : null}
+          <QueuePanel queue={status.queue} />
+          <AirReadinessPanel readiness={status.air_readiness} />
+          <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
+          <TtsPanel health={status.health.tts_runtime} currentProgramId={currentProgram?.id || null} onCommand={control} />
+          <MaintenancePanel maintenance={status.maintenance} watchdog={status.watchdog} onCommand={control} />
+          <MusicLibraryPanel library={status.music_library} />
+          <ConfigurationPanel configuration={status.configuration} />
+          <WebsiteSyncPanel sync={status.website_sync} />
+          <StrategyPanel orchestrator={status.orchestrator} onCommand={control} />
+          <AutonomyOps incidents={status.incidents} tasks={status.autonomous_tasks} />
+          <RuntimeWatch observability={status.observability} />
+          <SystemHealth health={status.health} />
+          <LogPanel logs={status.logs} />
+        </div>
       </section>
     </main>
   );

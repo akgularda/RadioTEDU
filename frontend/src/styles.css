@@ -120,8 +120,29 @@ button {
     linear-gradient(90deg, #e11d48 16%, transparent 16% 28%, #0f172a 28% 44%, transparent 44% 56%, #e11d48 56% 72%, transparent 72% 84%, #0f172a 84%);
 }
 
-.admin-console > .section-block {
+.admin-console > .admin-panel-deck {
   grid-column: 2;
+}
+
+.admin-panel-deck {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 18px 18px;
+}
+
+.admin-panel-deck > .section-block {
+  min-width: 0;
+  height: 100%;
+  border: 1px solid #e1e7ef;
+  border-radius: 7px;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
 }
 
 .admin-console > .station-cover {
@@ -1067,6 +1088,19 @@ button {
   .admin-console {
     width: min(100%, 440px);
     display: block;
+  }
+
+  .admin-panel-deck {
+    display: block;
+    padding: 0;
+    background: #fff;
+  }
+
+  .admin-panel-deck > .section-block {
+    border: 0;
+    border-bottom: 1px solid #edf0f4;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .admin-console > .station-header,

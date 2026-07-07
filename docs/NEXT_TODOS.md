@@ -209,8 +209,8 @@ Acceptance:
 
 ## P2 - Admin UX Polish
 
-- [ ] Make the admin app feel like broadcast software, not a website.
-- [ ] Use a compact operational layout.
+- [x] Make the admin app feel like broadcast software, not a website.
+- [x] Use a compact operational layout.
 - [x] Add clear status lights:
   - Air
   - Stream
