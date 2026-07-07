@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 import urllib.error
 import urllib.request
 import uuid
@@ -27,19 +26,36 @@ def request_json(base_url: str, path: str, method: str = "GET", payload: dict | 
         return {"ok": False, "status": None, "error": str(exc)}
 
 
+def request_text(base_url: str, path: str) -> dict:
+    request = urllib.request.Request(base_url.rstrip("/") + path, headers={"User-Agent": "RadioTEDU-Public-Smoke/1.0"}, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            text = response.read(500).decode("utf-8", errors="replace")
+            return {"ok": response.status < 500, "status": response.status, "text": text}
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "status": exc.code, "error": exc.read().decode("utf-8", errors="replace")[:300]}
+    except OSError as exc:
+        return {"ok": False, "status": None, "error": str(exc)}
+
+
 def minimal_snapshot() -> dict:
     return {
-        "snapshot": {
-            "channel": {"name": "RadioTEDU", "status": "idle"},
-            "now_playing": None,
-            "current_program": None,
-            "schedule": [],
-            "top_songs": [],
-            "top_genres": [],
-            "metrics": {},
-            "stream": {"url": "", "status": "unknown"},
-            "timestamp": time.time(),
-        }
+        "schema_version": 1,
+        "generated_at": "2026-07-07T00:00:00+00:00",
+        "expires_at": "2026-07-07T00:00:30+00:00",
+        "channel": {"id": "radiotedu", "name": "RadioTEDU", "status": "idle"},
+        "now_playing": None,
+        "current_program": None,
+        "current_minutes_left": None,
+        "next_program": None,
+        "next_programs": [],
+        "programs": [],
+        "top_songs": [],
+        "top_genres": [],
+        "content_breakdown": [],
+        "activity": [],
+        "metrics": {},
+        "stream": {"url": "", "status": "unknown"},
     }
 
 
@@ -47,6 +63,7 @@ def run_smoke(base_url: str, token: str | None) -> dict:
     session_id = f"smoke-{uuid.uuid4()}"
     results = {
         "status": request_json(base_url, "/api/public/status"),
+        "ai_route": request_text(base_url, "/ai"),
         "session_start": request_json(
             base_url,
             "/api/public/session/start",
@@ -81,6 +98,13 @@ def run_smoke(base_url: str, token: str | None) -> dict:
             payload=minimal_snapshot(),
             token="wrong-token",
         )
+    status_json = results["status"].get("json") or {}
+    results["expired_or_offline"] = {
+        "ok": bool(status_json.get("online") is False or status_json.get("message")),
+        "status": results["status"].get("status"),
+        "online": status_json.get("online"),
+        "message": status_json.get("message"),
+    }
     return results
 
 

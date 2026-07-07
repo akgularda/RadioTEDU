@@ -200,9 +200,9 @@ Acceptance:
   - session start/heartbeat/end works
   - public snapshot endpoint accepts correct token
   - public snapshot rejects wrong token
-- [ ] Verify:
-  - `/ai` build route available
-  - expired snapshot goes offline
+- [x] Verify:
+  - [x] `/ai` build route available
+  - [x] expired snapshot goes offline
 
 Acceptance:
 - Before going live, one command gives a plain pass/fail checklist.

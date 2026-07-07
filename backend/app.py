@@ -7,6 +7,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import Body, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .art.cover_generator import generate_covers
@@ -64,6 +65,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.mount("/static", StaticFiles(directory=str(settings.static_path)), name="static")
+    frontend_dist = Path(__file__).resolve().parents[1] / "dist" / "frontend"
+    frontend_assets = frontend_dist / "assets"
+    if frontend_assets.exists():
+        app.mount("/assets", StaticFiles(directory=str(frontend_assets)), name="frontend_assets")
 
     @app.on_event("startup")
     def startup() -> None:
@@ -81,6 +86,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/status")
     def status() -> dict:
         return build_status(settings, agent, orchestrator, public_snapshot_pusher)
+
+    @app.get("/ai")
+    def public_ai_page():
+        index_path = frontend_dist / "index.html"
+        if not index_path.exists():
+            raise HTTPException(status_code=404, detail="frontend build is not available")
+        return FileResponse(str(index_path), media_type="text/html")
 
     @app.get("/api/public/status")
     def public_status_endpoint() -> dict:

@@ -104,6 +104,18 @@ def test_two_machine_runbooks_and_smoke_scripts_exist() -> None:
         assert required in public_script
 
 
+def test_public_smoke_checks_ai_route_and_strict_snapshot_payload() -> None:
+    public_smoke = (ROOT / "scripts" / "smoke_public_server.py").read_text(encoding="utf-8")
+
+    assert '"/ai"' in public_smoke
+    assert "request_text" in public_smoke
+    assert "schema_version" in public_smoke
+    assert '"channel"' in public_smoke
+    assert '"generated_at"' in public_smoke
+    assert '"snapshot": {' not in public_smoke
+    assert "expired_or_offline" in public_smoke
+
+
 def test_required_local_streaming_and_sync_helpers_exist() -> None:
     liquidsoap_runner = (ROOT / "scripts" / "run_liquidsoap.ps1").read_text(encoding="utf-8")
     icecast_checker = (ROOT / "scripts" / "check_icecast.py").read_text(encoding="utf-8")

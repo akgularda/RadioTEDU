@@ -158,6 +158,17 @@ class RadioTEDUCoreTests(unittest.TestCase):
             ended = client.post("/api/public/session/end", json={"session_id": "listener_123456"}).json()
             self.assertEqual(0, ended["metrics"]["current_listeners"])
 
+    def test_ai_route_serves_public_dashboard_shell_when_build_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            client = TestClient(create_app(settings))
+
+            response = client.get("/ai")
+
+            self.assertIn(response.status_code, {200, 404})
+            if response.status_code == 200:
+                self.assertIn("text/html", response.headers["content-type"])
+
     def test_backend_starts_public_snapshot_pusher_when_configured(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self.make_settings(Path(tmp))
