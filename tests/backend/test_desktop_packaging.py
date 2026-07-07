@@ -25,6 +25,20 @@ def test_electron_desktop_admin_shell_is_declared() -> None:
     assert "radiotedu.com" not in main
 
 
+def test_electron_desktop_admin_manages_local_frontend_and_setup_screen() -> None:
+    main = (ROOT / "desktop" / "main.cjs").read_text(encoding="utf-8")
+
+    assert "frontendProcess" in main
+    assert "RADIOTEDU_MANAGE_FRONTEND" in main
+    assert "npm" in main
+    assert "run', 'dev" in main
+    assert "waitForUrl" in main
+    assert "loadSetupScreen" in main
+    assert "killFrontend" in main
+    assert "did-fail-load" in main
+    assert "Backend startup failed" in main
+
+
 def test_single_broadcast_computer_runner_exists() -> None:
     runner_path = ROOT / "scripts" / "run_broadcast_computer.py"
     assert runner_path.exists()

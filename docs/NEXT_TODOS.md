@@ -6,8 +6,8 @@ This is the next implementation backlog for turning the current MVP into a real 
 
 - [x] Convert the Electron shell into a real local operator app, not only a `127.0.0.1:5173` wrapper.
 - [x] Start the FastAPI backend from Electron when it is not already running.
-- [ ] Serve the built React admin UI from the desktop app or start the local frontend intentionally in dev mode.
-- [ ] Show a clear local setup screen when backend startup fails.
+- [x] Serve the built React admin UI from the desktop app or start the local frontend intentionally in dev mode.
+- [x] Show a clear local setup screen when backend startup fails.
 - [x] Stop child processes cleanly when the desktop app exits.
 - [x] Add desktop app logs for backend/frontend startup failures.
 - [x] Add tests that verify `desktop/main.cjs` manages backend process lifecycle or documents external-process mode explicitly.
