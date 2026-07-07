@@ -468,6 +468,7 @@ describe('Dashboard', () => {
 
 const publicStatus: PublicStatusResponse = {
   online: false,
+  schema_version: 1,
   received_at: null,
   generated_at: null,
   expires_at: null,

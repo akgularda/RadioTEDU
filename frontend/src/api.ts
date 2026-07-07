@@ -316,6 +316,7 @@ export interface PublicActivityItem {
 
 export interface PublicStatusResponse {
   online: boolean;
+  schema_version: number;
   received_at: string | null;
   generated_at: string | null;
   expires_at: string | null;

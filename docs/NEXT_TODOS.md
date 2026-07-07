@@ -138,17 +138,17 @@ Acceptance:
 
 ## P1 - Stronger Public Snapshot Contract
 
-- [ ] Define a strict Pydantic model for public snapshots instead of accepting arbitrary dicts.
-- [ ] Reject unexpected private fields at the API boundary.
-- [ ] Add schema tests for:
+- [x] Define a strict Pydantic model for public snapshots instead of accepting arbitrary dicts.
+- [x] Reject unexpected private fields at the API boundary.
+- [x] Add schema tests for:
   - local paths
   - secrets/tokens
   - logs
   - incidents
   - file paths
   - financial words
-- [ ] Version the snapshot payload.
-- [ ] Add backwards-compatible handling for older broadcast clients.
+- [x] Version the snapshot payload.
+- [x] Add backwards-compatible handling for older broadcast clients.
 
 Acceptance:
 - `POST /api/public/snapshot` cannot store private/admin fields even if a bad client sends them.

@@ -81,43 +81,59 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual([], payload["top_songs"])
             self.assertEqual([], payload["top_genres"])
 
-    def test_public_snapshot_requires_token_and_strips_private_fields(self) -> None:
+    def test_public_snapshot_requires_token_and_rejects_private_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self.make_settings(Path(tmp))
             settings.public_sync_token = "secret-token"
             settings.public_stream_url = "https://radiotedu.com/live.mp3"
             client = TestClient(create_app(settings))
-            payload = {
-                "channel": {"id": "radiotedu", "name": "RadioTEDU", "status": "live", "cover_path": "F:/private/cover.png"},
+            clean_payload = {
+                "generated_at": "2026-07-06T00:00:00+00:00",
+                "expires_at": "2026-07-06T00:00:30+00:00",
+                "channel": {"id": "radiotedu", "name": "RadioTEDU", "status": "live", "cover_path": "/static/generated/covers/radiotedu_station.png"},
                 "now_playing": {
                     "type": "track",
                     "title": "Blue Room",
                     "artist": "Alice",
-                    "file_path": "F:/Songs/Jazz/Alice - Blue Room.flac",
                     "started_at": "2026-07-06T00:00:00+00:00",
                 },
+                "current_program": None,
+                "current_minutes_left": None,
+                "next_program": None,
+                "next_programs": [],
+                "programs": [],
+                "top_songs": [],
+                "top_genres": [],
                 "stream": {"url": "https://radiotedu.com/live.mp3"},
                 "content_breakdown": [
                     {"label": "Music", "percent": 84},
                     {"label": "Talking", "percent": 16},
-                    {"label": "Money", "percent": 100},
                 ],
                 "activity": [
                     {"kind": "listener", "actor": "@student", "content": "more piano please", "created_at": "2026-07-06T00:10:00+00:00"},
-                    {"kind": "error", "actor": "ops", "content": "F:/Songs private payment token", "created_at": "2026-07-06T00:11:00+00:00"},
                 ],
+                "metrics": {"current_listeners": None, "popularity": None, "average_session": None},
+            }
+            private_payload = {
+                **clean_payload,
+                "now_playing": {**clean_payload["now_playing"], "file_path": "F:/Songs/Jazz/Alice - Blue Room.flac"},
                 "logs": [{"message": "private"}],
                 "incidents": [{"summary": "private"}],
             }
 
-            self.assertEqual(401, client.post("/api/public/snapshot", json=payload).status_code)
-            response = client.post("/api/public/snapshot", json=payload, headers={"X-RadioTEDU-Sync-Token": "secret-token"})
+            self.assertEqual(401, client.post("/api/public/snapshot", json=clean_payload).status_code)
+            self.assertEqual(
+                422,
+                client.post("/api/public/snapshot", json=private_payload, headers={"X-RadioTEDU-Sync-Token": "secret-token"}).status_code,
+            )
+            response = client.post("/api/public/snapshot", json=clean_payload, headers={"X-RadioTEDU-Sync-Token": "secret-token"})
             self.assertEqual(200, response.status_code)
             public = client.get("/api/public/status").json()
             self.assertTrue(public["online"])
+            self.assertEqual(1, public["schema_version"])
             self.assertEqual("Blue Room", public["now_playing"]["title"])
             self.assertNotIn("file_path", public["now_playing"])
-            self.assertIsNone(public["channel"]["cover_path"])
+            self.assertEqual("/static/generated/covers/radiotedu_station.png", public["channel"]["cover_path"])
             self.assertEqual([{"label": "Music", "percent": 84}, {"label": "Talking", "percent": 16}], public["content_breakdown"])
             self.assertEqual("more piano please", public["activity"][0]["content"])
             self.assertEqual(1, len(public["activity"]))

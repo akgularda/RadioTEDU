@@ -15,7 +15,7 @@ from .database import connect, init_db, log_event, now_iso, rows_to_dicts
 from .liquidsoap import liquidsoap_status, render_liquidsoap_config, start_liquidsoap, stop_liquidsoap
 from .llm import ollama_runtime_status
 from .maintenance import maintenance_summary, run_maintenance, watchdog_summary
-from .models import ListenerFeedbackRequest, ProgramUpdateRequest, PublicSessionRequest, SayRequest, SearchRequest
+from .models import ListenerFeedbackRequest, ProgramUpdateRequest, PublicSessionRequest, PublicSnapshotRequest, SayRequest, SearchRequest
 from .music_library import scan_music
 from .ollama_setup import check_ollama_setup
 from .orchestrator import AutonomousOrchestrator
@@ -88,12 +88,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/public/snapshot")
     def public_snapshot_endpoint(
-        payload: dict = Body(...),
+        payload: PublicSnapshotRequest = Body(...),
         x_radiotedu_sync_token: str | None = Header(default=None),
     ) -> dict:
         if not settings.public_sync_token or x_radiotedu_sync_token != settings.public_sync_token:
             raise HTTPException(status_code=401, detail="invalid sync token")
-        snapshot = store_public_snapshot(settings, payload)
+        snapshot = store_public_snapshot(settings, _model_to_dict(payload))
         return {"stored": True, "channel": snapshot["channel"]["id"]}
 
     @app.post("/api/public/session/start")
@@ -416,6 +416,12 @@ def air_start_readiness(settings: Settings, agent: RadioAgent, prepare_prebuffer
 
 def _readiness_item(ok: bool, detail: str, severity: str) -> dict:
     return {"ok": bool(ok), "detail": detail, "severity": severity}
+
+
+def _model_to_dict(model) -> dict:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
 
 
 def music_library_status(settings: Settings) -> dict:

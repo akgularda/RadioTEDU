@@ -76,6 +76,7 @@ def public_snapshot_from_state(settings: Settings, agent) -> dict:
     current = current_program(settings)
     upcoming = next_programs(settings)
     snapshot = {
+        "schema_version": 1,
         "generated_at": now_iso(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=max(5, settings.snapshot_ttl_seconds))).isoformat(),
         "channel": _public_channel(channel),
@@ -104,6 +105,7 @@ def public_snapshot_from_state(settings: Settings, agent) -> dict:
 
 def sanitize_public_snapshot(payload: dict) -> dict:
     safe = {
+        "schema_version": _nullable_int(payload.get("schema_version"), 1, 1) or 1,
         "generated_at": _text(payload.get("generated_at")),
         "expires_at": _text(payload.get("expires_at")),
         "channel": _public_channel(_dict(payload.get("channel"))),
@@ -329,6 +331,7 @@ class PublicSnapshotPusher:
 def _offline_public_status(settings: Settings, metrics: dict) -> dict:
     return {
         "online": False,
+        "schema_version": 1,
         "received_at": None,
         "generated_at": None,
         "expires_at": None,
