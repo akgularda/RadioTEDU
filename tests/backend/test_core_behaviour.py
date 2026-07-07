@@ -248,8 +248,8 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertIn({"label": "Talking", "percent": 50}, payload["content_breakdown"])
             self.assertEqual("listener", payload["activity"][0]["kind"])
             self.assertEqual("more mellow piano after midnight", payload["activity"][0]["content"])
-            self.assertTrue(any(item["kind"] == "broadcast" and "Queued Blue Room" in item["content"] for item in payload["activity"]))
-            self.assertNotRegex(json.dumps(payload).lower(), r"f:/songs|private|payment|file_path")
+            self.assertFalse(any("Queued Blue Room" in item["content"] for item in payload["activity"]))
+            self.assertNotRegex(json.dumps(payload).lower(), r"queued|f:/songs|private|payment|file_path")
 
     def test_news_prebuffer_uses_curated_rss_without_inventing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

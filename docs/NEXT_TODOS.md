@@ -110,10 +110,10 @@ Acceptance:
 
 ## P1 - Public `/ai` Safety And Simplicity
 
-- [ ] Keep public `/ai` as a listener page, not an operator console.
-- [ ] Remove or hide overly detailed operational internals from public UI.
-- [ ] Keep one RadioTEDU card only.
-- [ ] Show:
+- [x] Keep public `/ai` as a listener page, not an operator console.
+- [x] Remove or hide overly detailed operational internals from public UI.
+- [x] Keep one RadioTEDU card only.
+- [x] Show:
   - cover/logo
   - stream play button
   - now playing
@@ -123,14 +123,14 @@ Acceptance:
   - top genres
   - real listener/session metrics
   - offline/waiting state
-- [ ] Hide:
+- [x] Hide:
   - admin controls
   - logs
   - incidents
   - local paths
   - secrets
   - financial/support/money fields
-- [ ] Add tests for forbidden public text/fields.
+- [x] Add tests for forbidden public text/fields.
 
 Acceptance:
 - Public UI feels like an Andon-style radio page, not a dashboard/debug console.

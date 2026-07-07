@@ -61,17 +61,6 @@ def public_snapshot_from_state(settings: Settings, agent) -> dict:
                 """
             ).fetchall()
         )
-        broadcast_logs = rows_to_dicts(
-            conn.execute(
-                """
-                select message, created_at
-                from agent_logs
-                where level='info' and message like 'Queued %'
-                order by created_at desc, id desc
-                limit 4
-                """
-            ).fetchall()
-        )
     playback = agent.playback.state()
     current = current_program(settings)
     upcoming = next_programs(settings)
@@ -89,7 +78,7 @@ def public_snapshot_from_state(settings: Settings, agent) -> dict:
         "top_songs": [dict(row) for row in top_songs_rows],
         "top_genres": [dict(row) for row in top_genres_rows],
         "content_breakdown": _content_breakdown(music_count, talk_count),
-        "activity": _activity_from_state(listener_notes, broadcast_logs),
+        "activity": _activity_from_state(listener_notes),
         "stream": {
             "url": settings.public_stream_url,
             "status": "configured" if settings.public_stream_url else "unconfigured",
@@ -490,7 +479,7 @@ def _content_breakdown(music_count: int, talk_count: int) -> list[dict]:
     ]
 
 
-def _activity_from_state(listener_notes: list[dict], broadcast_logs: list[dict]) -> list[dict]:
+def _activity_from_state(listener_notes: list[dict]) -> list[dict]:
     activity: list[dict] = []
     for note in listener_notes:
         activity.append(
@@ -499,15 +488,6 @@ def _activity_from_state(listener_notes: list[dict], broadcast_logs: list[dict])
                 "actor": "Listener",
                 "content": note.get("content"),
                 "created_at": note.get("created_at"),
-            }
-        )
-    for log in broadcast_logs:
-        activity.append(
-            {
-                "kind": "broadcast",
-                "actor": "RadioTEDU",
-                "content": log.get("message"),
-                "created_at": log.get("created_at"),
             }
         )
     return activity[:8]
