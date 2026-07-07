@@ -1,6 +1,6 @@
 # RadioTEDU
 
-RadioTEDU is a local-first AI radio station that runs one channel only: `RadioTEDU`. Programs such as Morning Signal, Campus Frequencies, Night Lab, and Weekend Transmission are scheduled blocks inside that channel.
+RadioTEDU is a local-first AI radio station that runs one channel only: `RadioTEDU`. Programs such as TEDU Dawn, Campus Flow, Jazz Lab, and Weekend Signal are scheduled blocks inside that channel.
 
 There is no demo mode and no invented listening data. Add your own local music before starting playback. If no playable music exists, the backend and dashboard still run, the station stays idle, and the dashboard asks you to add music and rescan.
 

@@ -9,6 +9,7 @@ interface PublicDashboardProps {
 
 export function PublicDashboard({ status }: PublicDashboardProps) {
   const cover = status.channel.cover_path || '/static/generated/covers/radiotedu_station.png';
+  const logo = '/static/generated/covers/radiotedu_logo.png';
   const currentProgram = status.current_program || status.programs[0] || null;
   const sessionId = useMemo(() => getSessionId(), []);
   const [playing, setPlaying] = useState(false);
@@ -42,7 +43,7 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
     <main className="app-shell public-shell">
       <div className="public-page">
         <header className="public-brand">
-          <div className="radiotedu-mark">RT</div>
+          <img className="public-logo" src={logo} alt="RadioTEDU" />
           <div>
             <strong>RadioTEDU</strong>
             <span>AI Radio</span>

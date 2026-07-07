@@ -26,6 +26,10 @@ export interface Program {
   end_time: string;
   days_of_week: string;
   cover_path: string | null;
+  host_name?: string | null;
+  host_gender?: string | null;
+  voice?: string | null;
+  personality?: string | null;
   active?: number;
 }
 
@@ -253,7 +257,7 @@ export async function postPublicSession(path: string, sessionId: string): Promis
   });
 }
 
-export async function postControl(path: string, body?: unknown): Promise<void> {
+export async function postControl(path: string, body?: unknown): Promise<Record<string, unknown>> {
   const response = await fetch(path, {
     method: 'POST',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -262,6 +266,7 @@ export async function postControl(path: string, body?: unknown): Promise<void> {
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
+  return response.json() as Promise<Record<string, unknown>>;
 }
 
 export async function patchJson(path: string, body: unknown): Promise<void> {

@@ -81,12 +81,13 @@ class RadioAgent:
         reply = self._listener_reply_text(safe_feedback, program)
         filename = f"listener_reply_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}.wav"
         output = self.settings.tts_path / filename
-        clip_path = self.tts.synthesize(reply, str(output))
+        voice = self._program_voice(program)
+        clip_path = self.tts.synthesize(reply, str(output), voice=voice)
         self.playback.add(QueueItem("tts", "RadioTEDU listener reply", clip_path, duration_seconds=1.0))
         with connect(self.settings) as conn:
             conn.execute(
                 "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
-                ("listener_reply", reply, clip_path, getattr(self.tts, "provider_name", "tts"), program["id"], now_iso()),
+                ("listener_reply", reply, clip_path, voice or getattr(self.tts, "provider_name", "tts"), program["id"], now_iso()),
             )
             log_event(conn, "info", "Listener reply queued.", {"source": source, "program": program["name"]})
             conn.commit()
@@ -186,7 +187,8 @@ class RadioAgent:
                 planned_track_ids.add(int(track_id))
             filename = f"prebuffer_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}.wav"
             output = self.settings.tts_path / filename
-            clip_path = self.tts.synthesize(text, str(output))
+            voice = self._program_voice(program)
+            clip_path = self.tts.synthesize(text, str(output), voice=voice)
             with connect(self.settings) as conn:
                 if track_id is not None and self._ready_track_exists(conn, program_id or program["id"], int(track_id)):
                     conn.commit()
@@ -207,7 +209,7 @@ class RadioAgent:
                 )
                 conn.execute(
                     "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
-                    ("prebuffer_announcement", text, clip_path, getattr(self.tts, "provider_name", "tts"), program_id or program["id"], now_iso()),
+                    ("prebuffer_announcement", text, clip_path, voice or getattr(self.tts, "provider_name", "tts"), program_id or program["id"], now_iso()),
                 )
                 conn.commit()
             readiness = self.announcement_readiness(program_id)
@@ -512,14 +514,22 @@ class RadioAgent:
     def _narrate(self, text: str, program_id: str) -> str:
         filename = f"dj_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.wav"
         output = self.settings.tts_path / filename
-        clip_path = self.tts.synthesize(text, str(output))
+        program = current_program(self.settings)
+        voice = self._program_voice(program)
+        clip_path = self.tts.synthesize(text, str(output), voice=voice)
         with connect(self.settings) as conn:
             conn.execute(
                 "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
-                ("dj_line", text, clip_path, None, program_id, now_iso()),
+                ("dj_line", text, clip_path, voice, program_id, now_iso()),
             )
             conn.commit()
         return clip_path
+
+    def _program_voice(self, program: dict | None) -> str | None:
+        if not program:
+            return None
+        voice = " ".join(str(program.get("voice") or "").split())
+        return voice or None
 
     def _record_play(self, track_id: int, program_id: str, duration_seconds: float | None) -> None:
         with connect(self.settings) as conn:

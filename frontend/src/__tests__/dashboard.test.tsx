@@ -24,9 +24,13 @@ const emptyStatus: StatusResponse = {
   queue: [],
   current_program: {
     id: 'night_lab',
-    name: 'Night Lab',
-    description: 'Late-night ambient, experimental, and thoughtful tracks.',
+    name: 'Jazz Lab',
+    description: 'Evening selections with deeper jazz context, experiments, and smart transitions.',
     vibe: 'late jazz',
+    host_name: 'Selin',
+    host_gender: 'female',
+    voice: 'tr_female_cool',
+    personality: 'cool, informed, playful, music-first',
     start_time: '18:00',
     end_time: '23:00',
     days_of_week: 'mon,tue',
@@ -36,9 +40,13 @@ const emptyStatus: StatusResponse = {
   programs: [
     {
       id: 'night_lab',
-      name: 'Night Lab',
-      description: 'Late-night ambient, experimental, and thoughtful tracks.',
+      name: 'Jazz Lab',
+      description: 'Evening selections with deeper jazz context, experiments, and smart transitions.',
       vibe: 'late jazz',
+      host_name: 'Selin',
+      host_gender: 'female',
+      voice: 'tr_female_cool',
+      personality: 'cool, informed, playful, music-first',
       start_time: '18:00',
       end_time: '23:00',
       days_of_week: 'mon,tue',
@@ -192,24 +200,26 @@ describe('Dashboard', () => {
     expect(screen.getByRole('heading', { name: 'RadioTEDU' })).toBeInTheDocument();
     expect(screen.getByText('Idle — waiting for music library.')).toBeInTheDocument();
     expect(screen.getByText('No music library found. Add audio files to data/music and click Rescan.')).toBeInTheDocument();
-    expect(screen.getByText('No plays yet.')).toBeInTheDocument();
-    expect(screen.getByText('No genre data yet.')).toBeInTheDocument();
     expect(screen.getByText('Queue is empty.')).toBeInTheDocument();
     expect(screen.getByText('No logs yet.')).toBeInTheDocument();
     expect(screen.getByText('Long-Horizon Strategy')).toBeInTheDocument();
     expect(screen.getByText('RadioTEDU long-horizon strategy: keep one local jazz-first channel.')).toBeInTheDocument();
     expect(screen.getByText('Keep RadioTEDU as one channel')).toBeInTheDocument();
     expect(screen.getByText('Add music or rescan the library')).toBeInTheDocument();
-    expect(screen.getByText('Listener Notes')).toBeInTheDocument();
-    expect(screen.getByText('more mellow piano at night')).toBeInTheDocument();
+    expect(screen.queryByText('Listener Notes')).toBeNull();
+    expect(screen.queryByText('more mellow piano at night')).toBeNull();
     expect(screen.getByText('Autonomy Ops')).toBeInTheDocument();
     expect(screen.getByText('Ollama runtime is unreachable.')).toBeInTheDocument();
     expect(screen.getByText('Restart Ollama')).toBeInTheDocument();
     expect(screen.getByText('Air Output')).toBeInTheDocument();
+    expect(screen.getByText('Selin / female')).toBeInTheDocument();
+    expect(screen.getByText('tr_female_cool')).toBeInTheDocument();
     expect(screen.getByText('/ai')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Run Air' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('button', { name: 'Stop Air' })).toBeInTheDocument();
     expect(screen.getByText('Start Icecast Air')).toBeInTheDocument();
-    expect(screen.getByText('Weather')).toBeInTheDocument();
-    expect(screen.getByText('No weather data.')).toBeInTheDocument();
+    expect(screen.queryByText('Weather')).toBeNull();
+    expect(screen.queryByText('No weather data.')).toBeNull();
     expect(screen.getByText('Runtime Watch')).toBeInTheDocument();
     expect(screen.getByText('unreachable (qwen3.5:4b)')).toBeInTheDocument();
     expect(screen.getByText('cli_missing: ollama pull qwen3.5:4b')).toBeInTheDocument();
@@ -227,7 +237,11 @@ describe('Dashboard', () => {
       .mockReturnValueOnce('19:00')
       .mockReturnValueOnce('23:30')
       .mockReturnValueOnce('fri,sat')
-      .mockReturnValueOnce('deep nocturnal jazz');
+      .mockReturnValueOnce('deep nocturnal jazz')
+      .mockReturnValueOnce('Selin')
+      .mockReturnValueOnce('female')
+      .mockReturnValueOnce('tr_female_cool')
+      .mockReturnValueOnce('cool, informed, playful');
 
     render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
     await user.click(screen.getAllByText('Edit')[0]);
@@ -240,6 +254,10 @@ describe('Dashboard', () => {
         end_time: '23:30',
         days_of_week: 'fri,sat',
         vibe: 'deep nocturnal jazz',
+        host_name: 'Selin',
+        host_gender: 'female',
+        voice: 'tr_female_cool',
+        personality: 'cool, informed, playful',
       }),
     });
     fetchMock.mockRestore();
@@ -269,9 +287,13 @@ const publicStatus: PublicStatusResponse = {
   },
   current_program: {
     id: 'night_lab',
-    name: 'Night Lab',
-    description: 'Late-night ambient, experimental, and thoughtful tracks.',
+    name: 'Jazz Lab',
+    description: 'Evening selections with deeper jazz context, experiments, and smart transitions.',
     vibe: 'late jazz',
+    host_name: 'Selin',
+    host_gender: 'female',
+    voice: 'tr_female_cool',
+    personality: 'cool, informed, playful, music-first',
     start_time: '18:00',
     end_time: '23:00',
     days_of_week: 'mon,tue',
@@ -282,9 +304,13 @@ const publicStatus: PublicStatusResponse = {
   programs: [
     {
       id: 'night_lab',
-      name: 'Night Lab',
-      description: 'Late-night ambient, experimental, and thoughtful tracks.',
+      name: 'Jazz Lab',
+      description: 'Evening selections with deeper jazz context, experiments, and smart transitions.',
       vibe: 'late jazz',
+      host_name: 'Selin',
+      host_gender: 'female',
+      voice: 'tr_female_cool',
+      personality: 'cool, informed, playful, music-first',
       start_time: '18:00',
       end_time: '23:00',
       days_of_week: 'mon,tue',

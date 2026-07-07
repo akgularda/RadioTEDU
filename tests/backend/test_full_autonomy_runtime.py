@@ -125,7 +125,7 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
             self.assertTrue(Path(clip["file_path"]).exists())
             self.assertIn("mellow piano", clip["text"])
             self.assertIn("ask for late night jazz", clip["text"])
-            self.assertRegex(clip["text"], r"RadioTEDU|Night Lab|Morning Signal|Campus Frequencies|Weekend Transmission")
+            self.assertRegex(clip["text"], r"RadioTEDU|Jazz Lab|TEDU Dawn|Campus Flow|Weekend Signal")
             self.assertNotRegex(clip["text"].lower(), r"money|payment|donation|support|revenue|profit|buy|purchase|pay")
 
     def test_forever_runner_exposes_backend_and_frontend_specs(self) -> None:
@@ -555,7 +555,7 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
                             "night_lab",
                             "agent_prebuffer",
                             f"2026-07-05T00:00:0{index}+00:00",
-                            json.dumps({"program": "Night Lab", "prebuffer": True}, ensure_ascii=True),
+                            json.dumps({"program": "Jazz Lab", "prebuffer": True}, ensure_ascii=True),
                         ),
                     )
                 conn.commit()
@@ -631,7 +631,7 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
             with connect(settings) as conn:
                 alice = conn.execute("select id, title, artist, genre from tracks where artist='Alice'").fetchone()
                 metadata = {
-                    "program": "Night Lab",
+                    "program": "Jazz Lab",
                     "prebuffer": True,
                     "track_id": alice["id"],
                     "track_title": alice["title"],

@@ -12,9 +12,13 @@ from .config import Settings, ensure_runtime_dirs
 PROGRAMS = [
     {
         "id": "morning_signal",
-        "name": "Morning Signal",
-        "description": "Bright, curious, optimistic music with short updates to start the day.",
-        "vibe": "upbeat, warm, fresh",
+        "name": "TEDU Dawn",
+        "description": "A clear, warm morning broadcast with campus-aware jazz and concise day-openers.",
+        "vibe": "bright campus jazz, warm morning focus",
+        "host_name": "Ece",
+        "host_gender": "female",
+        "voice": "tr_female_warm",
+        "personality": "warm, optimistic, concise, gently energetic",
         "start_time": "06:00",
         "end_time": "10:00",
         "days_of_week": "mon,tue,wed,thu,fri",
@@ -22,9 +26,13 @@ PROGRAMS = [
     },
     {
         "id": "campus_frequencies",
-        "name": "Campus Frequencies",
-        "description": "Indie, electronic, and global sounds for focused work and study.",
-        "vibe": "focused, intelligent, mellow",
+        "name": "Campus Flow",
+        "description": "Focused daytime radio for study, work, and movement across campus.",
+        "vibe": "focused, intelligent, steady jazz flow",
+        "host_name": "Mert",
+        "host_gender": "male",
+        "voice": "tr_male_clear",
+        "personality": "calm, precise, curious, lightly academic",
         "start_time": "10:00",
         "end_time": "18:00",
         "days_of_week": "mon,tue,wed,thu,fri",
@@ -32,9 +40,13 @@ PROGRAMS = [
     },
     {
         "id": "night_lab",
-        "name": "Night Lab",
-        "description": "Late-night ambient, experimental, and thoughtful tracks.",
-        "vibe": "nocturnal, spacious, reflective",
+        "name": "Jazz Lab",
+        "description": "Evening selections with deeper jazz context, experiments, and smart transitions.",
+        "vibe": "cool, analytical, late-evening jazz",
+        "host_name": "Selin",
+        "host_gender": "female",
+        "voice": "tr_female_cool",
+        "personality": "cool, informed, playful, music-first",
         "start_time": "18:00",
         "end_time": "23:59",
         "days_of_week": "mon,tue,wed,thu,fri,sat,sun",
@@ -42,9 +54,13 @@ PROGRAMS = [
     },
     {
         "id": "weekend_transmission",
-        "name": "Weekend Transmission",
-        "description": "Relaxed discoveries, classics, and feel-good weekend selections.",
-        "vibe": "relaxed, sunny, eclectic",
+        "name": "Weekend Signal",
+        "description": "Relaxed weekend radio with discoveries, standards, and longer breathing room.",
+        "vibe": "relaxed, sunny, eclectic jazz",
+        "host_name": "Deniz",
+        "host_gender": "male",
+        "voice": "tr_male_late",
+        "personality": "easygoing, warm, conversational, weekend-minded",
         "start_time": "08:00",
         "end_time": "18:00",
         "days_of_week": "sat,sun",
@@ -73,6 +89,7 @@ def init_db(settings: Settings) -> None:
     with connect(settings) as conn:
         conn.executescript(SCHEMA)
         conn.execute("drop table if exists donations")
+        migrate_program_columns(conn)
         seed_channel(conn, settings)
         seed_programs(conn)
         conn.commit()
@@ -111,9 +128,9 @@ def seed_programs(conn: sqlite3.Connection) -> None:
             """
             insert into programs (
                 id, channel_id, name, description, vibe, start_time, end_time,
-                days_of_week, cover_path, active, created_at, updated_at
+                days_of_week, cover_path, host_name, host_gender, voice, personality, active, created_at, updated_at
             )
-            values (?, 'radiotedu', ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            values (?, 'radiotedu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             on conflict(id) do update set
                 name=excluded.name,
                 description=excluded.description,
@@ -122,6 +139,10 @@ def seed_programs(conn: sqlite3.Connection) -> None:
                 end_time=excluded.end_time,
                 days_of_week=excluded.days_of_week,
                 cover_path=excluded.cover_path,
+                host_name=excluded.host_name,
+                host_gender=excluded.host_gender,
+                voice=excluded.voice,
+                personality=excluded.personality,
                 active=1,
                 updated_at=excluded.updated_at
             """,
@@ -134,10 +155,27 @@ def seed_programs(conn: sqlite3.Connection) -> None:
                 program["end_time"],
                 program["days_of_week"],
                 program["cover_path"],
+                program["host_name"],
+                program["host_gender"],
+                program["voice"],
+                program["personality"],
                 timestamp,
                 timestamp,
             ),
         )
+
+
+def migrate_program_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("pragma table_info(programs)").fetchall()}
+    additions = {
+        "host_name": "text",
+        "host_gender": "text",
+        "voice": "text",
+        "personality": "text",
+    }
+    for name, column_type in additions.items():
+        if name not in existing:
+            conn.execute(f"alter table programs add column {name} {column_type}")
 
 
 def log_event(conn: sqlite3.Connection, level: str, message: str, metadata: dict | None = None) -> None:
@@ -173,6 +211,10 @@ create table if not exists programs (
     end_time text not null,
     days_of_week text not null,
     cover_path text,
+    host_name text,
+    host_gender text,
+    voice text,
+    personality text,
     active integer not null default 1,
     created_at text not null,
     updated_at text not null

@@ -17,12 +17,30 @@ interface DashboardProps {
 
 export function Dashboard({ status, onRefresh }: DashboardProps) {
   const cover = status.channel.cover_path || '/static/generated/covers/radiotedu_station.png';
+  const logo = '/static/generated/covers/radiotedu_logo.png';
   const isLive = status.channel.status === 'live';
   const currentProgram = status.current_program || status.programs[0] || null;
 
   async function control(path: string, body?: unknown) {
-    await postControl(path, body);
+    const result = await postControl(path, body);
     onRefresh();
+    return result;
+  }
+
+  async function runAir() {
+    const result = await control('/api/air/start');
+    if (result.started === false) {
+      const stream = result.stream as { reason?: string; command?: string; icecast_url?: string } | undefined;
+      window.alert(
+        stream?.reason === 'liquidsoap_missing'
+          ? `Run Air cannot start yet: Liquidsoap is not installed or not in PATH. Icecast mount is configured as ${stream.icecast_url || '/ai'}.`
+          : `Run Air could not start: ${stream?.reason || 'unknown error'}`
+      );
+    }
+  }
+
+  async function stopAir() {
+    await control('/api/air/stop');
   }
 
   async function sendFeedback() {
@@ -42,24 +60,45 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
     if (!days) return;
     const vibe = window.prompt('Vibe', program.vibe || '');
     if (vibe === null) return;
+    const hostName = window.prompt('Host name', program.host_name || '');
+    if (hostName === null) return;
+    const hostGender = window.prompt('Host gender', program.host_gender || '');
+    if (hostGender === null) return;
+    const voice = window.prompt('Voice id', program.voice || '');
+    if (voice === null) return;
+    const personality = window.prompt('Personality', program.personality || '');
+    if (personality === null) return;
     await patchJson(`/api/programs/${program.id}`, {
       start_time: start,
       end_time: end,
       days_of_week: days,
       vibe,
+      host_name: hostName,
+      host_gender: hostGender,
+      voice,
+      personality,
     });
     onRefresh();
   }
 
   return (
-    <main className="app-shell">
-      <section className="station-card" aria-label="RadioTEDU channel">
-        <img className="station-cover" src={cover} alt="" />
+    <main className="app-shell admin-shell">
+      <section className="station-card admin-console" aria-label="RadioTEDU channel">
+        <div className="admin-brandbar">
+          <img src={logo} alt="RadioTEDU" />
+          <div>
+            <strong>RadioTEDU Air</strong>
+            <span>{status.health.playback} / {status.liquidsoap.mount}</span>
+          </div>
+          <i className={status.channel.status === 'live' ? 'signal-line signal-line--live' : 'signal-line'} />
+        </div>
+
+        <img className="station-cover admin-cover" src={cover} alt="" />
 
         <div className="station-header">
           <div className="station-title-block">
             <h1>{status.channel.name}</h1>
-            <p>by {status.channel.host_model || 'qwen2.5:0.5b-instruct'}</p>
+            <p>{status.health.llm_runtime.status} / {status.channel.host_model || 'qwen2.5:0.5b-instruct'}</p>
           </div>
           <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh">
             <RefreshCw size={18} />
@@ -69,7 +108,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         {status.setup.message ? <div className="setup-banner">{status.setup.message}</div> : null}
 
         <div className="now-playing-row">
-          <button className="play-button" type="button" onClick={() => control('/api/control/start')} aria-label="Start">
+          <button className="play-button" type="button" onClick={runAir} aria-label="Run Air">
             <Play size={25} fill="currentColor" />
           </button>
           <div className="now-playing-copy">
@@ -83,10 +122,10 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         </div>
 
         <div className="metric-grid">
-          <Metric label="Local Listeners" value={formatNullable(status.metrics.local_listeners)} />
-          <Metric label="Popularity" value={formatPercent(status.metrics.popularity)} />
-          <Metric label="Feedback Notes" value={String(status.metrics.feedback_count)} />
-          <Metric label="Avg Listening Session" value={status.metrics.average_session || 'No data'} />
+          <Metric label="Listeners" value={formatNullable(status.metrics.local_listeners)} />
+          <Metric label="Prebuffer" value={`${status.observability.announcement_prebuffer.ready}/${status.observability.announcement_prebuffer.required}`} />
+          <Metric label="Air" value={status.liquidsoap.running ? 'On' : 'Off'} />
+          <Metric label="LLM" value={status.health.llm_runtime.status} />
         </div>
 
         <div className="actions-grid">
@@ -101,13 +140,13 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         </div>
 
         <div className="control-strip">
-          <button type="button" onClick={() => control('/api/control/start')}>
+          <button type="button" onClick={runAir}>
             <Play size={15} />
             Run Air
           </button>
-          <button type="button" onClick={() => control('/api/control/stop')}>
+          <button type="button" onClick={stopAir}>
             <Square size={15} />
-            Stop
+            Stop Air
           </button>
           <button type="button" onClick={() => control('/api/control/skip')}>
             <SkipForward size={15} />
@@ -120,18 +159,14 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         </div>
 
         <ScheduleSection program={currentProgram} />
-        <TopSongs songs={status.top_songs} />
-        <GenreBars genres={status.top_genres} />
         <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
         <QueuePanel queue={status.queue} />
         <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
         <StrategyPanel orchestrator={status.orchestrator} onCommand={control} />
         <AutonomyOps incidents={status.incidents} tasks={status.autonomous_tasks} />
-        <ListenerNotes messages={status.listener_messages} />
-        <WeatherPanel weather={status.weather} />
         <RuntimeWatch observability={status.observability} />
-        <LogPanel logs={status.logs} />
         <SystemHealth health={status.health} />
+        <LogPanel logs={status.logs} />
       </section>
     </main>
   );
@@ -157,7 +192,7 @@ function ScheduleSection({ program }: { program: StatusResponse['current_program
         <>
           <div className="schedule-title">{program.name}</div>
           <div className="progress-track"><span /></div>
-          <p>{program.description}</p>
+          <p className="compact-copy">{program.vibe || program.description}</p>
         </>
       ) : (
         <p className="muted">Nothing scheduled</p>
@@ -248,7 +283,8 @@ function ProgramsPanel({
             <img src={program.cover_path || '/static/generated/covers/radiotedu_station.png'} alt="" />
             <div>
               <strong>{program.name}</strong>
-              <span>{program.vibe || 'RadioTEDU'}</span>
+              <span>{program.host_name ? `${program.host_name} / ${program.host_gender || 'host'}` : program.vibe || 'RadioTEDU'}</span>
+              <small>{program.voice || 'voice'}</small>
               <small>{program.start_time}-{program.end_time}</small>
               <button className="inline-tool" type="button" onClick={() => onEdit(program)}>
                 <Pencil size={13} />
@@ -267,7 +303,7 @@ function AirOutputPanel({
   onCommand,
 }: {
   liquidsoap: StatusResponse['liquidsoap'];
-  onCommand: (path: string, body?: unknown) => Promise<void>;
+  onCommand: (path: string, body?: unknown) => Promise<unknown>;
 }) {
   return (
     <section className="section-block">
@@ -338,7 +374,7 @@ function StrategyPanel({
   onCommand,
 }: {
   orchestrator: StatusResponse['orchestrator'];
-  onCommand: (path: string, body?: unknown) => Promise<void>;
+  onCommand: (path: string, body?: unknown) => Promise<unknown>;
 }) {
   return (
     <section className="section-block">

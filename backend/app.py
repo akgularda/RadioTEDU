@@ -139,6 +139,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def start() -> dict:
         return orchestrator.start_background()
 
+    @app.post("/api/air/start")
+    def air_start() -> dict:
+        stream = start_liquidsoap(settings) if settings.liquidsoap_enabled else {"started": True, "reason": "liquidsoap_disabled"}
+        if settings.liquidsoap_enabled and not stream.get("started"):
+            with connect(settings) as conn:
+                log_event(conn, "error", "Run Air failed before broadcast start.", stream)
+                conn.commit()
+            return {"started": False, "stream": stream, "orchestrator": orchestrator.status()}
+        runner = orchestrator.start_background()
+        return {"started": bool(runner.get("running")), "stream": stream, "orchestrator": runner}
+
+    @app.post("/api/air/stop")
+    def air_stop() -> dict:
+        runner = orchestrator.stop_background()
+        stopped = agent.stop()
+        stream = stop_liquidsoap(settings) if settings.liquidsoap_enabled else {"stopped": True, "reason": "liquidsoap_disabled"}
+        return {"stopped": True, "stream": stream, "orchestrator": runner, "playback": stopped}
+
     @app.post("/api/control/stop")
     def stop() -> dict:
         orchestrator.stop_background()
@@ -273,6 +291,10 @@ def patch_program(settings: Settings, program_id: str, request: ProgramUpdateReq
         "start_time": request.start_time,
         "end_time": request.end_time,
         "days_of_week": request.days_of_week,
+        "host_name": request.host_name,
+        "host_gender": request.host_gender,
+        "voice": request.voice,
+        "personality": request.personality,
         "active": request.active,
     }
     updates = {key: value for key, value in allowed.items() if value is not None}

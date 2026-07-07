@@ -46,13 +46,15 @@ class RadioTEDUCoreTests(unittest.TestCase):
                 self.assertEqual([("radiotedu", "RadioTEDU")], [tuple(row) for row in channels])
                 self.assertEqual(
                     [
-                        ("Campus Frequencies",),
-                        ("Morning Signal",),
-                        ("Night Lab",),
-                        ("Weekend Transmission",),
+                        ("Campus Flow",),
+                        ("Jazz Lab",),
+                        ("TEDU Dawn",),
+                        ("Weekend Signal",),
                     ],
                     [tuple(row) for row in programs],
                 )
+                voices = conn.execute("select name, host_name, host_gender, voice from programs order by name").fetchall()
+                self.assertIn(("Jazz Lab", "Selin", "female", "tr_female_cool"), [tuple(row) for row in voices])
                 for table in ("tracks", "play_history", "listener_events"):
                     count = conn.execute(f"select count(*) from {table}").fetchone()[0]
                     self.assertEqual(0, count, table)
@@ -211,6 +213,23 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual("/ai", payload["liquidsoap"]["mount"])
             self.assertEqual("http://icecast.example:8010/ai", payload["liquidsoap"]["icecast_url"])
 
+    def test_run_air_reports_missing_stream_engine_instead_of_pretending_live(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.liquidsoap_enabled = True
+            settings.playback_backend = "liquidsoap"
+            settings.liquidsoap_command = "definitely-missing-liquidsoap"
+            settings.liquidsoap_mount = "/ai"
+
+            response = TestClient(create_app(settings)).post("/api/air/start")
+            payload = response.json()
+
+            self.assertEqual(200, response.status_code)
+            self.assertFalse(payload["started"])
+            self.assertEqual("liquidsoap_missing", payload["stream"]["reason"])
+            self.assertFalse(payload["stream"]["command_found"])
+
     def test_status_does_not_show_live_when_playback_is_idle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -263,7 +282,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
                 {"id": 5, "title": "First", "artist": "Artist A"},
                 {"id": 8, "title": "Second", "artist": "Artist B"},
             ],
-            program={"name": "Morning Signal", "description": "Bright", "vibe": "upbeat"},
+            program={"name": "TEDU Dawn", "description": "Bright", "vibe": "upbeat"},
             recent_tracks=[],
             web_context=[],
             llm_response_text="not json",
@@ -283,7 +302,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
                     "genre": "Jazz",
                 }
             ],
-            program={"name": "Morning Signal", "description": "Bright", "vibe": "upbeat"},
+            program={"name": "TEDU Dawn", "description": "Bright", "vibe": "upbeat"},
             recent_tracks=[],
             web_context=[],
             llm_response_text="not json",
@@ -298,7 +317,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
             candidates=[
                 {"id": 5, "title": "Blue Room", "artist": "Alice", "album": "Midnight Sessions", "genre": "Jazz"}
             ],
-            program={"name": "Morning Signal", "description": "Bright", "vibe": "upbeat"},
+            program={"name": "TEDU Dawn", "description": "Bright", "vibe": "upbeat"},
             recent_tracks=[],
             web_context=[
                 {
@@ -324,7 +343,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
                 candidates=[
                     {"id": 5, "title": "Blue Room", "artist": "Alice", "album": "Midnight Sessions", "genre": "Jazz"}
                 ],
-                program={"name": "Night Lab", "description": "Late", "vibe": "mellow"},
+                program={"name": "Jazz Lab", "description": "Late", "vibe": "mellow"},
                 recent_tracks=[],
                 web_context=[],
                 settings=settings,
@@ -356,7 +375,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
         try:
             choice = choose_track_with_llm(
                 candidates=[{"id": 5, "title": "Blue Room", "artist": "Alice"}],
-                program={"name": "Night Lab", "description": "Late", "vibe": "mellow"},
+                program={"name": "Jazz Lab", "description": "Late", "vibe": "mellow"},
                 recent_tracks=[],
                 web_context=[],
                 settings=settings,
@@ -429,7 +448,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
 
     def test_llm_prompt_includes_weather_context_for_announcements(self) -> None:
         prompt = build_user_prompt(
-            program={"name": "Morning Signal", "description": "Bright", "vibe": "fresh"},
+            program={"name": "TEDU Dawn", "description": "Bright", "vibe": "fresh", "host_name": "Ece", "host_gender": "female", "personality": "warm"},
             candidates=[{"id": 1, "title": "Blue Room", "artist": "Alice", "genre": "Jazz"}],
             recent_tracks=[],
             web_context=[],

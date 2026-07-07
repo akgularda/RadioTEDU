@@ -180,6 +180,8 @@ def build_user_prompt(
             f"Current program: {program.get('name')}",
             f"Program description: {program.get('description')}",
             f"Vibe: {program.get('vibe')}",
+            f"Host: {program.get('host_name') or 'RadioTEDU'} ({program.get('host_gender') or 'neutral'})",
+            f"Host personality: {program.get('personality') or 'concise, warm, music-first'}",
             f"Last played tracks: {'; '.join(recent_lines) if recent_lines else 'none'}",
             f"Web/RSS context: {'; '.join(context_lines) if context_lines else 'none'}",
             f"Weather context: {weather_line}",

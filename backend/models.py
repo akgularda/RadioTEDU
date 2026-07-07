@@ -23,6 +23,10 @@ class ProgramUpdateRequest(BaseModel):
     start_time: str | None = None
     end_time: str | None = None
     days_of_week: str | None = None
+    host_name: str | None = None
+    host_gender: str | None = None
+    voice: str | None = None
+    personality: str | None = None
     active: int | None = None
 
 
