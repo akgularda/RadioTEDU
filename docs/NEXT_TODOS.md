@@ -4,13 +4,13 @@ This is the next implementation backlog for turning the current MVP into a real 
 
 ## P0 - Make The Admin Panel A Real Desktop Program
 
-- [ ] Convert the Electron shell into a real local operator app, not only a `127.0.0.1:5173` wrapper.
-- [ ] Start the FastAPI backend from Electron when it is not already running.
+- [x] Convert the Electron shell into a real local operator app, not only a `127.0.0.1:5173` wrapper.
+- [x] Start the FastAPI backend from Electron when it is not already running.
 - [ ] Serve the built React admin UI from the desktop app or start the local frontend intentionally in dev mode.
 - [ ] Show a clear local setup screen when backend startup fails.
-- [ ] Stop child processes cleanly when the desktop app exits.
-- [ ] Add desktop app logs for backend/frontend startup failures.
-- [ ] Add tests that verify `desktop/main.cjs` manages backend process lifecycle or documents external-process mode explicitly.
+- [x] Stop child processes cleanly when the desktop app exits.
+- [x] Add desktop app logs for backend/frontend startup failures.
+- [x] Add tests that verify `desktop/main.cjs` manages backend process lifecycle or documents external-process mode explicitly.
 
 Acceptance:
 - Double-clicking the admin app opens a usable RadioTEDU operator panel.
@@ -19,13 +19,13 @@ Acceptance:
 
 ## P0 - One Broadcast Computer Runner
 
-- [ ] Add one command for the broadcast machine, for example `scripts/run_broadcast_computer.py`.
+- [x] Add one command for the broadcast machine, for example `scripts/run_broadcast_computer.py`.
 - [ ] Start or verify backend.
 - [ ] Start or verify the autonomous orchestrator.
-- [ ] Start or verify the public snapshot pusher when configured.
-- [ ] Render/check Liquidsoap config.
+- [x] Start or verify the public snapshot pusher when configured.
+- [x] Render/check Liquidsoap config.
 - [ ] Check Icecast reachability and mount state.
-- [ ] Check Ollama and configured Qwen model readiness.
+- [x] Check Ollama and configured Qwen model readiness.
 - [ ] Check TTS command readiness.
 - [ ] Check music library readiness.
 - [ ] Keep running with local-only logs and backoff.
@@ -37,16 +37,16 @@ Acceptance:
 
 ## P0 - Wire Snapshot Pusher Into Runtime
 
-- [ ] Start `PublicSnapshotPusher` automatically on backend startup when `PUBLIC_SYNC_URL` and `PUBLIC_SYNC_TOKEN` are configured.
-- [ ] Stop the pusher cleanly on backend shutdown.
+- [x] Start `PublicSnapshotPusher` automatically on backend startup when `PUBLIC_SYNC_URL` and `PUBLIC_SYNC_TOKEN` are configured.
+- [x] Stop the pusher cleanly on backend shutdown.
 - [ ] Keep `scripts/push_public_snapshot.py` as a manual/debug tool.
-- [ ] Add exponential backoff for repeated website sync failures.
+- [x] Add exponential backoff for repeated website sync failures.
 - [ ] Add admin status fields:
-  - last snapshot push time
-  - last snapshot push result
-  - consecutive failures
-  - configured/not configured
-- [ ] Add tests that verify no pusher starts without token/url.
+  - [x] last snapshot push time
+  - [x] last snapshot push result
+  - [x] consecutive failures
+  - [x] configured/not configured
+- [x] Add tests that verify no pusher starts without token/url.
 - [ ] Add tests that verify snapshot push failure does not stop broadcast.
 
 Acceptance:
@@ -62,10 +62,10 @@ Acceptance:
 - [ ] Verify Liquidsoap can read the queue file.
 - [ ] Verify Icecast mount `/ai` becomes reachable.
 - [ ] Add health fields:
-  - liquidsoap installed
-  - liquidsoap running
-  - queue file exists
-  - queue length
+  - [x] liquidsoap installed
+  - [x] liquidsoap running
+  - [x] queue file exists
+  - [x] queue length
   - Icecast reachable
   - mount active
 - [ ] Add a smoke test script for local stream readiness.

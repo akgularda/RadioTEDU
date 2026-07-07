@@ -156,6 +156,7 @@ export interface RuntimeObservability {
 
 export interface LiquidsoapState {
   enabled: boolean;
+  health: string;
   command: string;
   command_found: boolean;
   command_path: string | null;
@@ -164,6 +165,8 @@ export interface LiquidsoapState {
   rendered: boolean;
   script_path: string;
   queue_path: string;
+  queue_exists: boolean;
+  queue_length: number;
   mount: string;
   icecast_url: string;
 }
@@ -201,6 +204,14 @@ export interface WebsiteSyncHealth {
   public_sync_url: string;
   public_stream_url: string;
   interval_seconds: number;
+  pusher?: {
+    configured: boolean;
+    running: boolean;
+    last_push_at: number | null;
+    last_result: Record<string, unknown> | null;
+    consecutive_failures: number;
+    interval_seconds: number;
+  } | null;
 }
 
 export interface WeatherContext {

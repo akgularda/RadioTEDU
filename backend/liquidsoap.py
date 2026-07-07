@@ -57,8 +57,20 @@ def liquidsoap_status(settings: Settings) -> dict:
     if pid and not running:
         pid_path.unlink(missing_ok=True)
     rendered = Path(settings.liquidsoap_script_path).exists()
+    queue_path = Path(settings.liquidsoap_queue_path)
+    queue_exists = queue_path.exists()
+    queue_length = _queue_length(queue_path) if queue_exists else 0
+    if not settings.liquidsoap_enabled:
+        health = "disabled"
+    elif running:
+        health = "running"
+    elif command_path:
+        health = "ready"
+    else:
+        health = "missing"
     return {
         "enabled": settings.liquidsoap_enabled,
+        "health": health,
         "command": settings.liquidsoap_command,
         "command_found": bool(command_path),
         "command_path": command_path,
@@ -67,6 +79,8 @@ def liquidsoap_status(settings: Settings) -> dict:
         "rendered": rendered,
         "script_path": settings.liquidsoap_script_path,
         "queue_path": settings.liquidsoap_queue_path,
+        "queue_exists": queue_exists,
+        "queue_length": queue_length,
         "mount": settings.liquidsoap_mount if settings.liquidsoap_mount.startswith("/") else f"/{settings.liquidsoap_mount}",
         "icecast_url": f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{settings.liquidsoap_mount if settings.liquidsoap_mount.startswith('/') else '/' + settings.liquidsoap_mount}",
     }
@@ -108,6 +122,13 @@ def append_liquidsoap_item(settings: Settings, file_path: str) -> None:
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     with queue_path.open("a", encoding="utf-8") as handle:
         handle.write(str(Path(file_path).resolve()) + "\n")
+
+
+def _queue_length(path: Path) -> int:
+    try:
+        return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    except OSError:
+        return 0
 
 
 def _read_pid(path: Path) -> int | None:

@@ -435,7 +435,7 @@ function AirOutputPanel({
     <section className="section-block">
       <div className="section-heading">
         <span>Air Output</span>
-        <span>{liquidsoap.running ? 'Streaming' : liquidsoap.command_found ? 'Ready' : 'Missing'}</span>
+        <span>{liquidsoap.health}</span>
       </div>
       <div className="health-grid">
         <div>
@@ -452,7 +452,7 @@ function AirOutputPanel({
         </div>
         <div>
           <span>Queue</span>
-          <strong>{liquidsoap.rendered ? 'Rendered' : 'Not rendered'}</strong>
+          <strong>{liquidsoap.queue_exists ? `${liquidsoap.queue_length} items` : 'Not rendered'}</strong>
         </div>
       </div>
       <div className="strategy-actions">
@@ -528,11 +528,15 @@ function WebsiteSyncPanel({ sync }: { sync: StatusResponse['website_sync'] }) {
       <div className="health-grid">
         <div>
           <span>Snapshot Push</span>
-          <strong>{sync.configured ? 'Configured' : 'Not configured'}</strong>
+          <strong>{sync.pusher?.running ? 'Running' : sync.configured ? 'Configured' : 'Not configured'}</strong>
         </div>
         <div>
           <span>Interval</span>
           <strong>{sync.interval_seconds}s</strong>
+        </div>
+        <div>
+          <span>Failures</span>
+          <strong>{sync.pusher ? sync.pusher.consecutive_failures : 'No data'}</strong>
         </div>
         <div>
           <span>Public Stream</span>

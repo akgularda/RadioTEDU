@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -246,18 +247,58 @@ class PublicSnapshotPusher:
     def __init__(self, settings: Settings, agent) -> None:
         self.settings = settings
         self.agent = agent
-        self.last_push_at = 0.0
+        self.last_push_at = time.time()
+        self.last_result: dict | None = None
         self.failures = 0
+        self.running = False
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start_background(self) -> dict:
+        if not self.settings.public_sync_url or not self.settings.public_sync_token:
+            return {"running": False, "reason": "not_configured"}
+        if self.running:
+            return {"running": True, "reason": "already_running"}
+        self._stop.clear()
+        self.running = True
+        self._thread = threading.Thread(target=self._run_loop, name="radiotedu-public-snapshot-pusher", daemon=True)
+        self._thread.start()
+        return {"running": True, "reason": "started"}
+
+    def stop_background(self) -> dict:
+        self._stop.set()
+        thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
+        self.running = False
+        self._thread = None
+        return {"running": False, "reason": "stopped"}
+
+    def status(self) -> dict:
+        return {
+            "configured": bool(self.settings.public_sync_url and self.settings.public_sync_token),
+            "running": self.running,
+            "last_push_at": self.last_push_at if self.last_result else None,
+            "last_result": self.last_result,
+            "consecutive_failures": self.failures,
+            "interval_seconds": max(5, int(self.settings.public_sync_interval_seconds)),
+        }
+
+    def _run_loop(self) -> None:
+        while not self._stop.wait(1):
+            self.last_result = self.maybe_push()
 
     def maybe_push(self) -> dict:
         if not self.settings.public_sync_url or not self.settings.public_sync_token:
-            return {"pushed": False, "reason": "not_configured"}
+            self.last_result = {"pushed": False, "reason": "not_configured"}
+            return self.last_result
         now = time.time()
         interval = max(5, int(self.settings.public_sync_interval_seconds))
         backoff = min(120, interval * max(1, self.failures))
         wait = backoff if self.failures else interval
         if now - self.last_push_at < wait:
-            return {"pushed": False, "reason": "waiting"}
+            self.last_result = {"pushed": False, "reason": "waiting"}
+            return self.last_result
         self.last_push_at = now
         payload = public_snapshot_from_state(self.settings, self.agent)
         body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
@@ -274,13 +315,15 @@ class PublicSnapshotPusher:
             with urllib.request.urlopen(request, timeout=5) as response:
                 status = response.status
             self.failures = 0
-            return {"pushed": True, "status": status}
+            self.last_result = {"pushed": True, "status": status}
+            return self.last_result
         except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
             self.failures += 1
             with connect(self.settings) as conn:
                 log_event(conn, "warning", "Public snapshot push failed.", {"error": str(exc), "failures": self.failures})
                 conn.commit()
-            return {"pushed": False, "reason": "push_failed", "error": str(exc)}
+            self.last_result = {"pushed": False, "reason": "push_failed", "error": str(exc)}
+            return self.last_result
 
 
 def _offline_public_status(settings: Settings, metrics: dict) -> dict:

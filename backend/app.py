@@ -19,6 +19,7 @@ from .music_library import scan_music
 from .ollama_setup import check_ollama_setup
 from .orchestrator import AutonomousOrchestrator
 from .public_dashboard import (
+    PublicSnapshotPusher,
     public_session_end,
     public_session_heartbeat,
     public_session_start,
@@ -41,10 +42,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     generate_covers(settings)
     agent = RadioAgent(settings)
     orchestrator = AutonomousOrchestrator(settings, agent)
+    public_snapshot_pusher = (
+        PublicSnapshotPusher(settings, agent)
+        if settings.public_sync_url and settings.public_sync_token
+        else None
+    )
     app = FastAPI(title="RadioTEDU")
     app.state.settings = settings
     app.state.agent = agent
     app.state.orchestrator = orchestrator
+    app.state.public_snapshot_pusher = public_snapshot_pusher
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -61,14 +68,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def startup() -> None:
         if settings.autonomy_enabled:
             orchestrator.start_background()
+        if public_snapshot_pusher:
+            public_snapshot_pusher.start_background()
 
     @app.on_event("shutdown")
     def shutdown() -> None:
+        if public_snapshot_pusher:
+            public_snapshot_pusher.stop_background()
         orchestrator.stop_background()
 
     @app.get("/api/status")
     def status() -> dict:
-        return build_status(settings, agent, orchestrator)
+        return build_status(settings, agent, orchestrator, public_snapshot_pusher)
 
     @app.get("/api/public/status")
     def public_status_endpoint() -> dict:
@@ -238,7 +249,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-def build_status(settings: Settings, agent: RadioAgent, orchestrator: AutonomousOrchestrator) -> dict:
+def build_status(
+    settings: Settings,
+    agent: RadioAgent,
+    orchestrator: AutonomousOrchestrator,
+    public_snapshot_pusher: PublicSnapshotPusher | None = None,
+) -> dict:
     with connect(settings) as conn:
         channel = dict(conn.execute("select * from channels where id='radiotedu'").fetchone())
         track_count = conn.execute("select count(*) from tracks").fetchone()[0]
@@ -287,7 +303,7 @@ def build_status(settings: Settings, agent: RadioAgent, orchestrator: Autonomous
         "liquidsoap": liquidsoap,
         "music_library": music_library_status(settings),
         "configuration": operator_configuration(settings),
-        "website_sync": website_sync_health(settings),
+        "website_sync": website_sync_health(settings, public_snapshot_pusher),
         "setup": {
             "has_music": has_music,
             "message": "" if has_music else "No music library found. Add audio files to data/music and click Rescan.",
@@ -356,14 +372,16 @@ def operator_configuration(settings: Settings) -> dict:
     }
 
 
-def website_sync_health(settings: Settings) -> dict:
+def website_sync_health(settings: Settings, public_snapshot_pusher: PublicSnapshotPusher | None = None) -> dict:
     configured = bool(settings.public_sync_url and settings.public_sync_token)
+    pusher_status = public_snapshot_pusher.status() if public_snapshot_pusher else None
     return {
         "configured": configured,
-        "health": "configured" if configured else "not_configured",
+        "health": "running" if pusher_status and pusher_status["running"] else ("configured" if configured else "not_configured"),
         "public_sync_url": settings.public_sync_url,
         "public_stream_url": settings.public_stream_url,
         "interval_seconds": int(settings.public_sync_interval_seconds),
+        "pusher": pusher_status,
     }
 
 

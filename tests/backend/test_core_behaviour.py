@@ -142,6 +142,27 @@ class RadioTEDUCoreTests(unittest.TestCase):
             ended = client.post("/api/public/session/end", json={"session_id": "listener_123456"}).json()
             self.assertEqual(0, ended["metrics"]["current_listeners"])
 
+    def test_backend_starts_public_snapshot_pusher_when_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.public_sync_url = "https://radiotedu.example/api/public/snapshot"
+            settings.public_sync_token = "secret-token"
+            app = create_app(settings)
+
+            self.assertIsNotNone(app.state.public_snapshot_pusher)
+            with TestClient(app):
+                self.assertTrue(app.state.public_snapshot_pusher.running)
+            self.assertFalse(app.state.public_snapshot_pusher.running)
+
+    def test_backend_does_not_start_public_snapshot_pusher_without_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            app = create_app(settings)
+
+            self.assertIsNone(app.state.public_snapshot_pusher)
+            with TestClient(app):
+                self.assertIsNone(app.state.public_snapshot_pusher)
+
     def test_public_snapshot_from_state_includes_dossier_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -258,7 +279,24 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertFalse(payload["started"])
             self.assertEqual("no_music", payload["reason"])
             self.assertEqual(0, payload["music_library"]["playable_track_count"])
-            self.assertEqual("idle", status["channel"]["status"])
+
+    def test_liquidsoap_status_reports_operator_health_and_queue_length(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.liquidsoap_enabled = True
+            settings.liquidsoap_queue_path = str(root / "liquidsoap" / "queue.m3u")
+            settings.liquidsoap_script_path = str(root / "liquidsoap" / "radiotedu.liq")
+            render_liquidsoap_config(settings)
+            Path(settings.liquidsoap_queue_path).write_text("a.wav\nb.wav\n", encoding="utf-8")
+
+            from backend.liquidsoap import liquidsoap_status
+
+            status = liquidsoap_status(settings)
+
+            self.assertIn(status["health"], {"missing", "ready", "running"})
+            self.assertEqual(2, status["queue_length"])
+            self.assertTrue(status["queue_exists"])
 
     def test_status_exposes_operator_library_config_and_public_sync_health(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

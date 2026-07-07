@@ -177,6 +177,7 @@ const emptyStatus: StatusResponse = {
   },
   liquidsoap: {
     enabled: true,
+    health: 'missing',
     command: 'liquidsoap',
     command_found: false,
     command_path: null,
@@ -185,6 +186,8 @@ const emptyStatus: StatusResponse = {
     rendered: true,
     script_path: 'data/liquidsoap/radiotedu.liq',
     queue_path: 'data/liquidsoap/queue.m3u',
+    queue_exists: true,
+    queue_length: 0,
     mount: '/ai',
     icecast_url: 'http://127.0.0.1:8001/ai',
   },
