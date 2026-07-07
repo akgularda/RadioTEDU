@@ -134,6 +134,8 @@ def choose_track_with_llm(
             return _fallback(candidates, str(exc), web_context)
     if settings is None:
         return _fallback(candidates, "LLM settings were not provided", web_context)
+    if settings.llm_provider.lower() != "ollama":
+        return _fallback(candidates, f"LLM provider disabled ({settings.llm_provider})", web_context)
     if runtime_status is not None and not _runtime_can_generate(runtime_status):
         status = runtime_status.get("status", "unavailable")
         model = runtime_status.get("configured_model", settings.ollama_model)

@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+import subprocess
+import time
 import shutil
 from collections.abc import Callable
 from typing import Any
 
 from .config import Settings
 from .llm import ollama_runtime_status
+
+
+CommandRunner = Callable[[list[str]], int]
+
+
+def _run_ollama_repair_command(command: list[str]) -> int:
+    if command == ["ollama", "serve"]:
+        kwargs: dict[str, Any] = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        subprocess.Popen(command, **kwargs)
+        return 0
+    return subprocess.run(command, check=False).returncode
 
 
 def check_ollama_setup(
@@ -80,4 +95,61 @@ def check_ollama_setup(
         "suggested_commands": suggested_commands,
         "error": runtime["error"],
         "runtime": runtime,
+    }
+
+
+def repair_ollama_runtime(
+    settings: Settings,
+    *,
+    runtime_status: Callable[[Settings], dict[str, Any]] = ollama_runtime_status,
+    runner: CommandRunner = _run_ollama_repair_command,
+    sleeper: Callable[[float], None] = time.sleep,
+    which: Callable[[str], str | None] = shutil.which,
+) -> dict[str, Any]:
+    actions: list[str] = []
+    start_attempted = False
+    pull_attempted = False
+    start_returncode: int | None = None
+    pull_returncode: int | None = None
+
+    def evaluate() -> dict[str, Any]:
+        return check_ollama_setup(settings, which=which, runtime=runtime_status(settings))
+
+    result = evaluate()
+    if result["status"] == "ready":
+        return {
+            **result,
+            "start_attempted": start_attempted,
+            "pull_attempted": pull_attempted,
+            "start_returncode": start_returncode,
+            "pull_returncode": pull_returncode,
+            "actions": actions,
+        }
+    if not result["cli_found"]:
+        return {
+            **result,
+            "start_attempted": start_attempted,
+            "pull_attempted": pull_attempted,
+            "start_returncode": start_returncode,
+            "pull_returncode": pull_returncode,
+            "actions": actions,
+        }
+    if not result["server_reachable"]:
+        start_attempted = True
+        actions.append("start")
+        start_returncode = runner(["ollama", "serve"])
+        sleeper(3)
+        result = evaluate()
+    if result["server_reachable"] and not result["model_available"]:
+        pull_attempted = True
+        actions.append("pull")
+        pull_returncode = runner(["ollama", "pull", settings.ollama_model])
+        result = evaluate()
+    return {
+        **result,
+        "start_attempted": start_attempted,
+        "pull_attempted": pull_attempted,
+        "start_returncode": start_returncode,
+        "pull_returncode": pull_returncode,
+        "actions": actions,
     }

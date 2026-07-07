@@ -81,7 +81,7 @@ Acceptance:
 - [x] Keep 5-8 ready announcement clips during live operation.
 - [x] Generate announcements 4-5 songs ahead.
 - [ ] Do not block playback while waiting for the LLM.
-- [ ] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
+- [x] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
 - [ ] Keep deterministic fallback only as a dead-air prevention path.
 - [ ] Add admin visibility:
   - [x] ready count

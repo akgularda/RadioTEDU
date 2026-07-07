@@ -11,9 +11,10 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.config import Settings
 from backend.database import connect, init_db
+from backend.llm import choose_track_with_llm
 from backend.liquidsoap import render_liquidsoap_config
 from backend.music_library import scan_music
-from backend.ollama_setup import check_ollama_setup
+from backend.ollama_setup import check_ollama_setup, repair_ollama_runtime
 from backend.orchestrator import AutonomousOrchestrator
 from backend.playback import PlaybackController, QueueItem
 from backend.radio_agent import RadioAgent
@@ -47,6 +48,8 @@ def make_settings(root: Path) -> Settings:
         rss_feeds_path=str(root / "rss_feeds.json"),
         playback_backend="simulate",
         min_ready_announcements=0,
+        ollama_url="http://127.0.0.1:9",
+        ollama_timeout_seconds=1,
     )
 
 
@@ -431,6 +434,110 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
             with connect(settings) as conn:
                 task_count = conn.execute("select count(*) from autonomous_tasks where task_type='restart_llm_runtime' and status='queued'").fetchone()[0]
             self.assertEqual(1, task_count)
+
+    def test_orchestrator_restart_llm_task_starts_ollama_and_pulls_missing_model(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = make_settings(root)
+            settings.ollama_model = "qwen3.5:4b"
+            agent = RadioAgent(settings)
+            orchestrator = AutonomousOrchestrator(settings, agent)
+            calls = []
+
+            def fake_repair(repair_settings):
+                calls.append(repair_settings.ollama_model)
+                return {
+                    "status": "ready",
+                    "configured_model": "qwen3.5:4b",
+                    "start_attempted": True,
+                    "pull_attempted": True,
+                    "actions": ["start", "pull"],
+                }
+
+            from backend import orchestrator as orchestrator_module
+
+            original = orchestrator_module.repair_ollama_runtime
+            orchestrator_module.repair_ollama_runtime = fake_repair
+            try:
+                details = orchestrator._run_task({"task_type": "restart_llm_runtime"})
+            finally:
+                orchestrator_module.repair_ollama_runtime = original
+
+            self.assertEqual(["qwen3.5:4b"], calls)
+            self.assertEqual("ready", details["status"])
+            self.assertTrue(details["start_attempted"])
+            self.assertTrue(details["pull_attempted"])
+
+    def test_ollama_repair_starts_server_and_pulls_missing_model_before_rechecking(self) -> None:
+        settings = Settings(ollama_url="http://127.0.0.1:11434", ollama_model="qwen3.5:4b")
+        calls = []
+        states = [
+            {
+                "provider": "ollama",
+                "configured_model": "qwen3.5:4b",
+                "base_url": "http://127.0.0.1:11434",
+                "reachable": False,
+                "model_available": False,
+                "installed_models": [],
+                "status": "unreachable",
+                "error": "connection refused",
+            },
+            {
+                "provider": "ollama",
+                "configured_model": "qwen3.5:4b",
+                "base_url": "http://127.0.0.1:11434",
+                "reachable": True,
+                "model_available": False,
+                "installed_models": [],
+                "status": "model_missing",
+                "error": None,
+            },
+            {
+                "provider": "ollama",
+                "configured_model": "qwen3.5:4b",
+                "base_url": "http://127.0.0.1:11434",
+                "reachable": True,
+                "model_available": True,
+                "installed_models": ["qwen3.5:4b"],
+                "status": "ready",
+                "error": None,
+            },
+        ]
+
+        def fake_runtime(_settings):
+            return states.pop(0)
+
+        def fake_runner(command):
+            calls.append(command)
+            return 0
+
+        result = repair_ollama_runtime(
+            settings,
+            runtime_status=fake_runtime,
+            runner=fake_runner,
+            sleeper=lambda _seconds: None,
+            which=lambda _name: "C:/Program Files/Ollama/ollama.exe",
+        )
+
+        self.assertEqual([["ollama", "serve"], ["ollama", "pull", "qwen3.5:4b"]], calls)
+        self.assertEqual("ready", result["status"])
+        self.assertTrue(result["start_attempted"])
+        self.assertTrue(result["pull_attempted"])
+
+    def test_disabled_llm_provider_uses_deterministic_fallback_without_network(self) -> None:
+        settings = Settings(llm_provider="disabled", ollama_timeout_seconds=30)
+        with patch("backend.llm.call_ollama", side_effect=AssertionError("network should not be called")):
+            choice = choose_track_with_llm(
+                [{"id": 7, "title": "Blue Room", "artist": "Alice"}],
+                {"name": "Night Lab"},
+                [],
+                [],
+                settings,
+            )
+
+        self.assertEqual(7, choice.song_id)
+        self.assertTrue(choice.used_fallback)
+        self.assertIn("disabled", choice.reason)
 
     def test_orchestrator_records_prebuffer_incident_when_announcements_cannot_be_prepared(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

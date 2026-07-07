@@ -9,6 +9,7 @@ from .config import Settings
 from .database import connect, init_db, log_event, now_iso
 from .llm import ollama_runtime_status
 from .music_library import scan_music
+from .ollama_setup import repair_ollama_runtime
 from .public_dashboard import PublicSnapshotPusher
 from .radio_agent import RadioAgent
 
@@ -198,10 +199,16 @@ class AutonomousOrchestrator:
                 raise RuntimeError("announcement prebuffer is still not ready")
             return readiness
         if task_type == "restart_llm_runtime":
-            status = ollama_runtime_status(self.settings)
-            if not status.get("reachable") or not status.get("model_available"):
+            status = repair_ollama_runtime(self.settings)
+            if status.get("status") != "ready":
                 raise RuntimeError(f"LLM runtime is still {status.get('status')}")
-            return {"status": status.get("status"), "model": status.get("configured_model")}
+            return {
+                "status": status.get("status"),
+                "model": status.get("configured_model"),
+                "start_attempted": status.get("start_attempted"),
+                "pull_attempted": status.get("pull_attempted"),
+                "actions": status.get("actions", []),
+            }
         raise RuntimeError(f"unknown autonomous task: {task_type}")
 
     def maintain_long_horizon_strategy(self, track_count: int | None = None) -> dict:
