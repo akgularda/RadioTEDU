@@ -7,7 +7,7 @@ import {
   Square,
   Pencil,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 
 import { patchJson, postControl, type Program, type StatusResponse } from '../api';
 
@@ -16,11 +16,32 @@ interface DashboardProps {
   onRefresh: () => void;
 }
 
+type Notice = {
+  tone: 'info' | 'error';
+  text: string;
+};
+
+type ProgramDraft = {
+  start_time: string;
+  end_time: string;
+  days_of_week: string;
+  vibe: string;
+  host_name: string;
+  host_gender: string;
+  voice: string;
+  personality: string;
+};
+
 export function Dashboard({ status, onRefresh }: DashboardProps) {
   const cover = status.channel.cover_path || '/static/generated/covers/radiotedu_station.png';
   const logo = '/static/generated/covers/radiotedu_logo.png';
   const isLive = status.channel.status === 'live';
   const currentProgram = status.current_program || status.programs[0] || null;
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [sayOpen, setSayOpen] = useState(false);
+  const [sayText, setSayText] = useState('');
+  const [editingProgram, setEditingProgram] = useState<Program | null>(null);
+  const [programDraft, setProgramDraft] = useState<ProgramDraft | null>(null);
 
   async function control(path: string, body?: unknown) {
     const result = await postControl(path, body);
@@ -32,53 +53,69 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
     const result = await control('/api/air/start');
     if (result.started === false) {
       const stream = result.stream as { reason?: string; command?: string; icecast_url?: string } | undefined;
-      window.alert(
-        stream?.reason === 'liquidsoap_missing'
+      setNotice({
+        tone: 'error',
+        text: stream?.reason === 'liquidsoap_missing'
           ? `Run Air cannot start yet: Liquidsoap is not installed or not in PATH. Icecast mount is configured as ${stream.icecast_url || '/ai'}.`
-          : `Run Air could not start: ${stream?.reason || 'unknown error'}`
-      );
+          : `Run Air could not start: ${stream?.reason || 'unknown error'}`,
+      });
+      return;
     }
+    setNotice({ tone: 'info', text: 'Broadcast loop started.' });
   }
 
   async function stopAir() {
     await control('/api/air/stop');
   }
 
-  async function sayNow() {
-    const text = window.prompt('Say now on RadioTEDU');
-    if (!text?.trim()) {
+  async function submitSayNow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = sayText.trim();
+    if (!text) {
       return;
     }
-    await control('/api/control/say', { text: text.trim() });
+    await control('/api/control/say', { text });
+    setSayText('');
+    setSayOpen(false);
+    setNotice({ tone: 'info', text: 'Announcement queued.' });
   }
 
-  async function editProgram(program: Program) {
-    const start = window.prompt('Start time', program.start_time);
-    if (!start) return;
-    const end = window.prompt('End time', program.end_time);
-    if (!end) return;
-    const days = window.prompt('Days', program.days_of_week);
-    if (!days) return;
-    const vibe = window.prompt('Vibe', program.vibe || '');
-    if (vibe === null) return;
-    const hostName = window.prompt('Host name', program.host_name || '');
-    if (hostName === null) return;
-    const hostGender = window.prompt('Host gender', program.host_gender || '');
-    if (hostGender === null) return;
-    const voice = window.prompt('Voice id', program.voice || '');
-    if (voice === null) return;
-    const personality = window.prompt('Personality', program.personality || '');
-    if (personality === null) return;
-    await patchJson(`/api/programs/${program.id}`, {
-      start_time: start,
-      end_time: end,
-      days_of_week: days,
-      vibe,
-      host_name: hostName,
-      host_gender: hostGender,
-      voice,
-      personality,
+  function editProgram(program: Program) {
+    setEditingProgram(program);
+    setProgramDraft({
+      start_time: program.start_time,
+      end_time: program.end_time,
+      days_of_week: program.days_of_week,
+      vibe: program.vibe || '',
+      host_name: program.host_name || '',
+      host_gender: program.host_gender || '',
+      voice: program.voice || '',
+      personality: program.personality || '',
     });
+  }
+
+  function updateProgramDraft(key: keyof ProgramDraft, value: string) {
+    setProgramDraft((draft) => (draft ? { ...draft, [key]: value } : draft));
+  }
+
+  async function submitProgramEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingProgram || !programDraft) {
+      return;
+    }
+    await patchJson(`/api/programs/${editingProgram.id}`, {
+      start_time: programDraft.start_time,
+      end_time: programDraft.end_time,
+      days_of_week: programDraft.days_of_week,
+      vibe: programDraft.vibe,
+      host_name: programDraft.host_name,
+      host_gender: programDraft.host_gender,
+      voice: programDraft.voice,
+      personality: programDraft.personality,
+    });
+    setEditingProgram(null);
+    setProgramDraft(null);
+    setNotice({ tone: 'info', text: 'Program updated.' });
     onRefresh();
   }
 
@@ -130,7 +167,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         </div>
 
         <div className="actions-grid">
-          <button className="outline-button" type="button" onClick={sayNow}>
+          <button className="outline-button" type="button" onClick={() => setSayOpen((open) => !open)}>
             <MessageSquare size={17} />
             Say Now
           </button>
@@ -139,6 +176,29 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
             Generate Covers
           </button>
         </div>
+
+        {notice ? (
+          <div className={`action-message action-message--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
+            {notice.text}
+          </div>
+        ) : null}
+
+        {sayOpen ? (
+          <form className="quick-form" onSubmit={submitSayNow}>
+            <label>
+              <span>Announcement text</span>
+              <textarea value={sayText} onChange={(event) => setSayText(event.currentTarget.value)} rows={3} />
+            </label>
+            <div className="form-actions">
+              <button className="outline-button" type="submit">
+                Send announcement
+              </button>
+              <button className="inline-tool" type="button" onClick={() => setSayOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : null}
 
         <div className="control-strip">
           <button type="button" onClick={runAir}>
@@ -161,6 +221,18 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
 
         <ScheduleSection program={currentProgram} />
         <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
+        {editingProgram && programDraft ? (
+          <ProgramEditPanel
+            program={editingProgram}
+            draft={programDraft}
+            onChange={updateProgramDraft}
+            onSubmit={submitProgramEdit}
+            onCancel={() => {
+              setEditingProgram(null);
+              setProgramDraft(null);
+            }}
+          />
+        ) : null}
         <QueuePanel queue={status.queue} />
         <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
         <MusicLibraryPanel library={status.music_library} />
@@ -273,7 +345,7 @@ function ProgramsPanel({
 }: {
   programs: StatusResponse['programs'];
   currentProgramId: string | null;
-  onEdit: (program: Program) => Promise<void>;
+  onEdit: (program: Program) => void;
 }) {
   return (
     <section className="section-block">
@@ -299,6 +371,56 @@ function ProgramsPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+const programEditFields: Array<{ key: keyof ProgramDraft; label: string }> = [
+  { key: 'start_time', label: 'Start time' },
+  { key: 'end_time', label: 'End time' },
+  { key: 'days_of_week', label: 'Days' },
+  { key: 'vibe', label: 'Vibe' },
+  { key: 'host_name', label: 'Host name' },
+  { key: 'host_gender', label: 'Host gender' },
+  { key: 'voice', label: 'Voice id' },
+  { key: 'personality', label: 'Personality' },
+];
+
+function ProgramEditPanel({
+  program,
+  draft,
+  onChange,
+  onSubmit,
+  onCancel,
+}: {
+  program: Program;
+  draft: ProgramDraft;
+  onChange: (key: keyof ProgramDraft, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  return (
+    <form className="section-block program-editor" onSubmit={onSubmit}>
+      <div className="section-heading">
+        <span>Edit {program.name}</span>
+        <span>{program.id}</span>
+      </div>
+      <div className="form-grid">
+        {programEditFields.map((field) => (
+          <label key={field.key}>
+            <span>{field.label}</span>
+            <input value={draft[field.key]} onChange={(event) => onChange(field.key, event.currentTarget.value)} />
+          </label>
+        ))}
+      </div>
+      <div className="form-actions">
+        <button className="outline-button" type="submit">
+          Save program
+        </button>
+        <button className="inline-tool" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

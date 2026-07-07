@@ -64,6 +64,8 @@ button {
 .admin-console > .now-playing-row,
 .admin-console > .metric-grid,
 .admin-console > .actions-grid,
+.admin-console > .action-message,
+.admin-console > .quick-form,
 .admin-console > .control-strip {
   grid-column: 1;
 }
@@ -132,6 +134,8 @@ button {
 
 .admin-console > .metric-grid,
 .admin-console > .actions-grid,
+.admin-console > .action-message,
+.admin-console > .quick-form,
 .admin-console > .control-strip,
 .admin-console > .now-playing-row {
   border-right: 1px solid #edf0f4;
@@ -385,6 +389,31 @@ button {
   border-bottom: 1px solid #edf0f4;
 }
 
+.action-message {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid #edf0f4;
+  color: #2f3d52;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.action-message--error {
+  background: #fff4f2;
+  color: #9f2f1c;
+}
+
+.action-message--info {
+  background: #eef8f1;
+  color: #286139;
+}
+
+.quick-form {
+  padding: 12px 16px;
+  border-bottom: 1px solid #edf0f4;
+  background: #fff;
+}
+
 .outline-button,
 .control-strip button {
   min-height: 45px;
@@ -432,6 +461,52 @@ button {
 .control-strip button {
   min-height: 34px;
   font-size: 13px;
+}
+
+.quick-form label,
+.program-editor label {
+  display: grid;
+  gap: 5px;
+  color: #68758a;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.quick-form textarea,
+.program-editor input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #dce2ea;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #1f2937;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.quick-form textarea {
+  resize: vertical;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-actions {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-actions .outline-button {
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .section-block {
@@ -785,6 +860,8 @@ button {
   .station-header,
   .now-playing-row,
   .actions-grid,
+  .action-message,
+  .quick-form,
   .control-strip,
   .section-block {
     padding-left: 12px;
@@ -799,6 +876,10 @@ button {
   .control-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 860px) {
@@ -810,6 +891,8 @@ button {
   .admin-console > .station-header,
   .admin-console > .metric-grid,
   .admin-console > .actions-grid,
+  .admin-console > .action-message,
+  .admin-console > .quick-form,
   .admin-console > .control-strip,
   .admin-console > .now-playing-row {
     border-right: 0;

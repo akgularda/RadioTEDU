@@ -13,6 +13,7 @@ from backend.database import connect, init_db
 from backend.liquidsoap import render_liquidsoap_config
 from backend.llm import build_user_prompt, choose_track_with_llm, ollama_runtime_status
 from backend.music_library import iter_audio_files, scan_music
+from backend.playback import QueueItem
 from backend.tts.dummy_tts import DummyTTSProvider
 from backend.weather.open_meteo import OpenMeteoWeatherProvider
 
@@ -223,7 +224,9 @@ class RadioTEDUCoreTests(unittest.TestCase):
             make_wav(root / "music" / "Alice - Blue Room.wav")
             scan_music(settings)
 
-            payload = TestClient(create_app(settings)).get("/api/status").json()
+            app = create_app(settings)
+            app.state.agent.playback.now_playing = QueueItem("track", "Blue Room", str(root / "music" / "Alice - Blue Room.wav"), artist="Alice")
+            payload = TestClient(app).get("/api/status").json()
 
             self.assertEqual(1, payload["music_library"]["total_indexed_tracks"])
             self.assertEqual(1, payload["music_library"]["playable_track_count"])
@@ -299,6 +302,27 @@ class RadioTEDUCoreTests(unittest.TestCase):
             payload = TestClient(create_app(settings)).get("/api/status").json()
             self.assertEqual("idle", payload["channel"]["status"])
             self.assertEqual("idle", payload["now_playing"]["type"])
+
+    def test_status_does_not_show_live_when_liquidsoap_stream_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.liquidsoap_enabled = True
+            settings.playback_backend = "liquidsoap"
+            settings.liquidsoap_command = "definitely-missing-liquidsoap"
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            app = create_app(settings)
+            with connect(settings) as conn:
+                conn.execute("update channels set status='live'")
+                conn.commit()
+
+            app.state.agent.playback.now_playing = QueueItem("track", "Blue Room", str(root / "music" / "Alice - Blue Room.wav"), artist="Alice")
+            payload = TestClient(app).get("/api/status").json()
+
+            self.assertEqual("idle", payload["channel"]["status"])
+            self.assertFalse(payload["liquidsoap"]["running"])
+            self.assertFalse(payload["liquidsoap"]["command_found"])
 
     def test_autonomy_api_controls_are_local_and_nonfinancial(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

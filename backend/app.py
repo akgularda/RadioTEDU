@@ -263,6 +263,9 @@ def build_status(settings: Settings, agent: RadioAgent, orchestrator: Autonomous
         }
     if now_playing["type"] == "idle" and channel["status"] == "live":
         channel["status"] = "idle"
+    liquidsoap = liquidsoap_status(settings)
+    if settings.liquidsoap_enabled and not liquidsoap["running"] and channel["status"] == "live":
+        channel["status"] = "idle"
     return {
         "channel": channel,
         "now_playing": now_playing,
@@ -281,7 +284,7 @@ def build_status(settings: Settings, agent: RadioAgent, orchestrator: Autonomous
         "observability": observability(settings, agent),
         "logs": recent_logs(settings),
         "health": health(settings, agent),
-        "liquidsoap": liquidsoap_status(settings),
+        "liquidsoap": liquidsoap,
         "music_library": music_library_status(settings),
         "configuration": operator_configuration(settings),
         "website_sync": website_sync_health(settings),

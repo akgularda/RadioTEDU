@@ -324,11 +324,12 @@ describe('Dashboard', () => {
       ok: true,
       json: () => Promise.resolve({ queued: true }),
     } as unknown as Response);
-    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue('A short RadioTEDU bulletin');
 
     render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
 
     await user.click(screen.getByRole('button', { name: 'Say Now' }));
+    await user.type(screen.getByLabelText('Announcement text'), 'A short RadioTEDU bulletin');
+    await user.click(screen.getByRole('button', { name: 'Send announcement' }));
     await user.click(screen.getByRole('button', { name: 'Generate Covers' }));
 
     expect(fetchMock).toHaveBeenCalledWith('/api/control/say', {
@@ -342,25 +343,51 @@ describe('Dashboard', () => {
       body: undefined,
     });
     fetchMock.mockRestore();
-    promptMock.mockRestore();
+  });
+
+  it('shows broadcast startup failures inline', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        started: false,
+        stream: {
+          reason: 'liquidsoap_missing',
+          icecast_url: 'http://127.0.0.1:8001/ai',
+        },
+      }),
+    } as unknown as Response);
+
+    render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
+    await user.click(screen.getAllByRole('button', { name: 'Run Air' })[1]);
+
+    expect(await screen.findByText('Run Air cannot start yet: Liquidsoap is not installed or not in PATH. Icecast mount is configured as http://127.0.0.1:8001/ai.')).toBeInTheDocument();
+    fetchMock.mockRestore();
   });
 
   it('sends program edits through the API', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);
-    const promptMock = vi.spyOn(window, 'prompt');
-    promptMock
-      .mockReturnValueOnce('19:00')
-      .mockReturnValueOnce('23:30')
-      .mockReturnValueOnce('fri,sat')
-      .mockReturnValueOnce('deep nocturnal jazz')
-      .mockReturnValueOnce('Selin')
-      .mockReturnValueOnce('female')
-      .mockReturnValueOnce('tr_female_cool')
-      .mockReturnValueOnce('cool, informed, playful');
 
     render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
     await user.click(screen.getAllByText('Edit')[0]);
+    await user.clear(screen.getByLabelText('Start time'));
+    await user.type(screen.getByLabelText('Start time'), '19:00');
+    await user.clear(screen.getByLabelText('End time'));
+    await user.type(screen.getByLabelText('End time'), '23:30');
+    await user.clear(screen.getByLabelText('Days'));
+    await user.type(screen.getByLabelText('Days'), 'fri,sat');
+    await user.clear(screen.getByLabelText('Vibe'));
+    await user.type(screen.getByLabelText('Vibe'), 'deep nocturnal jazz');
+    await user.clear(screen.getByLabelText('Host name'));
+    await user.type(screen.getByLabelText('Host name'), 'Selin');
+    await user.clear(screen.getByLabelText('Host gender'));
+    await user.type(screen.getByLabelText('Host gender'), 'female');
+    await user.clear(screen.getByLabelText('Voice id'));
+    await user.type(screen.getByLabelText('Voice id'), 'tr_female_cool');
+    await user.clear(screen.getByLabelText('Personality'));
+    await user.type(screen.getByLabelText('Personality'), 'cool, informed, playful');
+    await user.click(screen.getByRole('button', { name: 'Save program' }));
 
     expect(fetchMock).toHaveBeenCalledWith('/api/programs/night_lab', {
       method: 'PATCH',
@@ -377,7 +404,6 @@ describe('Dashboard', () => {
       }),
     });
     fetchMock.mockRestore();
-    promptMock.mockRestore();
   });
 });
 
