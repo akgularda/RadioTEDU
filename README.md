@@ -139,6 +139,8 @@ QWEN_TTS_COMMAND=python scripts/qwen_tts_command.py --text {text} --out {output_
 
 The wrapper uses `QWEN_TTS_HTTP_URL` when you have a Qwen TTS HTTP endpoint that returns WAV bytes. If no endpoint is configured, it exits quickly and the configured fallback provider handles the clip.
 
+The local admin app shows TTS runtime health and includes a `Test TTS` button. The test uses the current program host voice, such as `tr_female_cool` for Jazz Lab, and writes the generated WAV plus its `.txt` sidecar locally.
+
 On Windows, set the fallback to SAPI for real local speech when the Qwen command is empty:
 
 ```env
