@@ -855,6 +855,27 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
                 used = conn.execute("select status from announcement_queue where text='prebuilt intro'").fetchone()
             self.assertEqual("used", used["status"])
 
+    def test_queue_next_track_does_not_prepare_announcements_on_live_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = make_settings(root)
+            settings.min_ready_announcements = 5
+            settings.max_ready_announcements = 5
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+
+            class LivePathAgent(RadioAgent):
+                def _prepare_announcement(self, program, index, required, planned_track_ids):
+                    raise AssertionError("live playback path must not wait on announcement generation")
+
+            agent = LivePathAgent(settings)
+            force_night_lab(settings)
+
+            result = agent.queue_next_track()
+
+            self.assertFalse(result["started"])
+            self.assertEqual("announcement_prebuffer_not_ready", result["reason"])
+
     def test_queue_next_track_uses_track_bound_ready_announcement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

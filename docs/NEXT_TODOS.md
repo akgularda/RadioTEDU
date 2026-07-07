@@ -80,7 +80,7 @@ Acceptance:
 - [x] Treat `MIN_READY_ANNOUNCEMENTS=5` as a true air-readiness gate.
 - [x] Keep 5-8 ready announcement clips during live operation.
 - [x] Generate announcements 4-5 songs ahead.
-- [ ] Do not block playback while waiting for the LLM.
+- [x] Do not block playback while waiting for the LLM.
 - [x] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
 - [ ] Keep deterministic fallback only as a dead-air prevention path.
 - [ ] Add admin visibility:

@@ -99,7 +99,7 @@ class RadioAgent:
 
     def queue_next_track(self) -> dict:
         program = current_program(self.settings)
-        prebuffer = self.ensure_announcement_prebuffer(program["id"])
+        prebuffer = self.announcement_readiness(program["id"])
         if not prebuffer["ready_to_broadcast"]:
             with connect(self.settings) as conn:
                 log_event(conn, "info", "Waiting for announcement prebuffer before broadcast.", prebuffer)
@@ -111,6 +111,8 @@ class RadioAgent:
         candidates = self._candidates(program)
         if selected is None and not candidates:
             return {"started": False, "reason": "no_candidates"}
+        if selected is None and announcement is None and int(prebuffer.get("required") or 0) > 0:
+            return {"started": False, "reason": "ready_announcement_missing", **prebuffer}
         if selected is None:
             context = self._web_context(self._search_query_for_candidates(candidates))
             weather_context = self._weather_context()
