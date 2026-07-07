@@ -950,6 +950,55 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertNotEqual("weather", metadata.get("kind"))
             self.assertNotIn("No weather data", row["text"])
 
+    def test_song_context_prebuffer_uses_sourced_context_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.min_ready_announcements = 1
+            settings.max_ready_announcements = 1
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            from backend.radio_agent import RadioAgent
+
+            agent = RadioAgent(settings)
+            agent._web_context = lambda _query: [
+                {
+                    "title": "Blue Room by Alice source note",
+                    "snippet": "Alice recorded Blue Room during a late Ankara session.",
+                    "url": "https://music.example/blue-room",
+                    "source": "rss",
+                }
+            ]
+            readiness = agent.ensure_announcement_prebuffer("night_lab")
+
+            self.assertTrue(readiness["ready_to_broadcast"])
+            with connect(settings) as conn:
+                row = conn.execute("select text, metadata_json from announcement_queue where status='ready'").fetchone()
+            metadata = json.loads(row["metadata_json"])
+            self.assertEqual("song_context", metadata["kind"])
+            self.assertEqual("https://music.example/blue-room", metadata["context_url"])
+            self.assertIn("Alice recorded Blue Room", row["text"])
+
+    def test_song_context_prebuffer_skips_when_no_sourced_context_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.min_ready_announcements = 1
+            settings.max_ready_announcements = 1
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            from backend.radio_agent import RadioAgent
+
+            agent = RadioAgent(settings)
+            agent._web_context = lambda _query: []
+            readiness = agent.ensure_announcement_prebuffer("night_lab")
+
+            self.assertTrue(readiness["ready_to_broadcast"])
+            with connect(settings) as conn:
+                row = conn.execute("select text, metadata_json from announcement_queue where status='ready'").fetchone()
+            metadata = json.loads(row["metadata_json"])
+            self.assertNotEqual("song_context", metadata.get("kind"))
+
     def test_llm_prompt_includes_weather_context_for_announcements(self) -> None:
         prompt = build_user_prompt(
             program={"name": "TEDU Dawn", "description": "Bright", "vibe": "fresh", "host_name": "Ece", "host_gender": "female", "personality": "warm"},

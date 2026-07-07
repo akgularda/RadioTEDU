@@ -331,6 +331,9 @@ class RadioAgent:
                 "metadata": {"program": program.get("name"), "prebuffer": True},
             }
         context = self._web_context(self._search_query_for_candidates(candidates))
+        song_context = self._song_context_announcement(program, candidates, context)
+        if song_context:
+            return song_context
         weather_context = self._weather_context()
         recent = self._recent_tracks()
         choice = choose_track_with_llm(
@@ -384,6 +387,37 @@ class RadioAgent:
                 "source": context.get("source") or self.settings.weather_provider,
             },
         }
+
+    def _song_context_announcement(self, program: dict, candidates: list[dict], context: list[dict]) -> dict | None:
+        for candidate in candidates:
+            title = " ".join(str(candidate.get("title") or "").split())
+            artist = " ".join(str(candidate.get("artist") or "").split())
+            if not title and not artist:
+                continue
+            for item in context[:5]:
+                snippet = " ".join(str(item.get("snippet") or "").split())
+                url = " ".join(str(item.get("url") or "").split())
+                source = " ".join(str(item.get("source") or "").split())
+                haystack = f"{item.get('title') or ''} {snippet}".lower()
+                if not snippet or not source or not url:
+                    continue
+                if title.lower() not in haystack and artist.lower() not in haystack:
+                    continue
+                line = f"RadioTEDU source note for {title or artist}: {snippet}"
+                return {
+                    "text": " ".join(line.split()[:30]),
+                    "metadata": {
+                        "program": program.get("name"),
+                        "prebuffer": True,
+                        "kind": "song_context",
+                        "track_id": int(candidate["id"]),
+                        "track_title": title,
+                        "track_artist": artist,
+                        "context_url": url,
+                        "source": source,
+                    },
+                }
+        return None
 
     def _news_announcement(self, program: dict) -> dict | None:
         if not self.settings.news_enabled:

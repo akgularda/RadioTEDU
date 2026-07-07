@@ -127,6 +127,8 @@ MAX_READY_ANNOUNCEMENTS=8
 
 The agent fills `announcement_queue` with ready TTS clips, starts playback only when the ready count reaches the minimum, then consumes one prepared announcement before each real track. When playable tracks exist, each prepared announcement stores the planned real `track_id`, title, artist, genre, and decision reason in `metadata_json`, so the spoken intro and the song stay paired. If Ollama is unavailable, fallback intros still use real search/RSS snippets when supplied, then local metadata such as album, genre, mood, or duration; they do not invent song facts. Legacy generic agent prebuffer rows are retired as `stale` once real track-bound announcements can be prepared. This avoids generating every DJ line at the last second.
 
+When sourced search/RSS context explicitly matches an upcoming real track, the prebuffer can queue a short `song_context` note with the source URL in metadata. If no matching sourced context exists, RadioTEDU skips that segment and uses only local track metadata.
+
 Autonomous ticks also maintain the prebuffer even when another item, such as a listener reply, is already queued. The tick response includes the current prebuffer snapshot so operators can see whether the station is ready to broadcast.
 
 ## TTS
