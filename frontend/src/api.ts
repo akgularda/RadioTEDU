@@ -218,6 +218,10 @@ export interface WatchdogState {
   stale_prebuffer: number;
   ready_prebuffer: number;
   error_log_count: number;
+  liquidsoap_process_down: number;
+  icecast_mount_down: number;
+  stream_health: string;
+  icecast_status: number | null;
 }
 
 export interface OperatorConfiguration {

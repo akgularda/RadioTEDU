@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .config import Settings
 from .database import connect, init_db, now_iso
+from .liquidsoap import liquidsoap_status
 
 
 def run_maintenance(settings: Settings, clip_retention_days: int = 7, max_agent_logs: int = 500) -> dict:
@@ -12,6 +13,7 @@ def run_maintenance(settings: Settings, clip_retention_days: int = 7, max_agent_
     cutoff = (datetime.now(timezone.utc) - timedelta(days=max(0, int(clip_retention_days)))).isoformat()
     clips_deleted = 0
     files_deleted = 0
+    database_vacuumed = False
     with connect(settings) as conn:
         old_clips = conn.execute(
             "select id, file_path from generated_clips where created_at < ? order by created_at asc",
@@ -41,10 +43,13 @@ def run_maintenance(settings: Settings, clip_retention_days: int = 7, max_agent_
             ("last_maintenance_json", f"clips={clips_deleted};files={files_deleted};logs={len(log_ids)}", now_iso()),
         )
         conn.commit()
+        conn.execute("vacuum")
+        database_vacuumed = True
     return {
         "clips_deleted": clips_deleted,
         "files_deleted": files_deleted,
         "logs_deleted": len(log_ids),
+        "database_vacuumed": database_vacuumed,
         "clip_retention_days": int(clip_retention_days),
         "max_agent_logs": int(max_agent_logs),
     }
@@ -69,10 +74,15 @@ def watchdog_summary(settings: Settings) -> dict:
         stale_prebuffer = conn.execute("select count(*) from announcement_queue where status in ('failed', 'stale')").fetchone()[0]
         ready_prebuffer = conn.execute("select count(*) from announcement_queue where status='ready'").fetchone()[0]
         errors = conn.execute("select count(*) from agent_logs where level='error'").fetchone()[0]
+    stream = liquidsoap_status(settings)
     return {
         "stale_prebuffer": int(stale_prebuffer),
         "ready_prebuffer": int(ready_prebuffer),
         "error_log_count": int(errors),
+        "liquidsoap_process_down": int(bool(settings.liquidsoap_enabled and not stream["running"])),
+        "icecast_mount_down": int(bool(settings.liquidsoap_enabled and not stream["mount_active"])),
+        "stream_health": stream["health"],
+        "icecast_status": stream["icecast_status"],
     }
 
 

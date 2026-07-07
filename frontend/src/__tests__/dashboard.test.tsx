@@ -230,6 +230,10 @@ const emptyStatus: StatusResponse = {
     stale_prebuffer: 0,
     ready_prebuffer: 0,
     error_log_count: 0,
+    liquidsoap_process_down: 1,
+    icecast_mount_down: 1,
+    stream_health: 'missing',
+    icecast_status: null,
   },
   configuration: {
     MUSIC_DIR: 'data/music',

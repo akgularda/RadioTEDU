@@ -230,11 +230,11 @@ Acceptance:
 
 - [ ] Add a watchdog for stuck playback.
 - [x] Add a watchdog for stale announcement buffer.
-- [ ] Add a watchdog for Liquidsoap process exit.
-- [ ] Add a watchdog for Icecast mount going down.
+- [x] Add a watchdog for Liquidsoap process exit.
+- [x] Add a watchdog for Icecast mount going down.
 - [x] Add bounded log retention.
 - [x] Add generated clip retention cleanup.
-- [ ] Add database vacuum/maintenance task.
+- [x] Add database vacuum/maintenance task.
 
 Acceptance:
 - The station can run unattended for many hours without unbounded disk growth or silent failure.

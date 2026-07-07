@@ -572,6 +572,14 @@ function MaintenancePanel({
           <span>Recent Errors</span>
           <strong>{watchdog.error_log_count}</strong>
         </div>
+        <div>
+          <span>Liquidsoap Watch</span>
+          <strong>{watchdog.liquidsoap_process_down ? 'Down' : watchdog.stream_health}</strong>
+        </div>
+        <div>
+          <span>Icecast Watch</span>
+          <strong>{watchdog.icecast_mount_down ? 'Down' : watchdog.icecast_status || 'No data'}</strong>
+        </div>
       </div>
       <div className="strategy-actions">
         <button type="button" onClick={() => onCommand('/api/maintenance/run')}>

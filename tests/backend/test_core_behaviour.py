@@ -768,6 +768,22 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertIn("generated_clip_count", payload["maintenance"])
             self.assertIn("stale_prebuffer", payload["watchdog"])
 
+    def test_watchdog_reports_stream_failures_and_maintenance_vacuums_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.liquidsoap_enabled = True
+            settings.liquidsoap_command = "definitely-missing-liquidsoap"
+            init_db(settings)
+
+            from backend.maintenance import run_maintenance, watchdog_summary
+
+            watchdog = watchdog_summary(settings)
+            result = run_maintenance(settings)
+
+            self.assertEqual(1, watchdog["liquidsoap_process_down"])
+            self.assertEqual(1, watchdog["icecast_mount_down"])
+            self.assertTrue(result["database_vacuumed"])
+
     def test_weather_context_uses_real_payload_and_is_exposed_in_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self.make_settings(Path(tmp))
