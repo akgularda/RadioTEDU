@@ -580,6 +580,10 @@ function MaintenancePanel({
           <span>Icecast Watch</span>
           <strong>{watchdog.icecast_mount_down ? 'Down' : watchdog.icecast_status || 'No data'}</strong>
         </div>
+        <div>
+          <span>Playback Watch</span>
+          <strong>{watchdog.stuck_playback ? `Stuck: ${watchdog.title || 'current item'}` : 'Clear'}</strong>
+        </div>
       </div>
       <div className="strategy-actions">
         <button type="button" onClick={() => onCommand('/api/maintenance/run')}>

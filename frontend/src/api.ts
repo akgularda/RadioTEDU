@@ -222,6 +222,10 @@ export interface WatchdogState {
   icecast_mount_down: number;
   stream_health: string;
   icecast_status: number | null;
+  stuck_playback: number;
+  elapsed_seconds: number | null;
+  threshold_seconds: number | null;
+  title: string | null;
 }
 
 export interface OperatorConfiguration {

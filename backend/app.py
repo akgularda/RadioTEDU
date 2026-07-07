@@ -308,6 +308,8 @@ def build_status(
     liquidsoap = liquidsoap_status(settings)
     if settings.liquidsoap_enabled and not liquidsoap["running"] and channel["status"] == "live":
         channel["status"] = "idle"
+    watchdog = watchdog_summary(settings)
+    watchdog.update(agent.playback.watchdog_status())
     return {
         "channel": channel,
         "now_playing": now_playing,
@@ -330,7 +332,7 @@ def build_status(
         "music_library": music_library_status(settings),
         "air_readiness": air_start_readiness(settings, agent, prepare_prebuffer=False),
         "maintenance": maintenance_summary(settings),
-        "watchdog": watchdog_summary(settings),
+        "watchdog": watchdog,
         "configuration": operator_configuration(settings),
         "website_sync": website_sync_health(settings, public_snapshot_pusher),
         "setup": {

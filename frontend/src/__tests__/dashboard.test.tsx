@@ -234,6 +234,10 @@ const emptyStatus: StatusResponse = {
     icecast_mount_down: 1,
     stream_health: 'missing',
     icecast_status: null,
+    stuck_playback: 1,
+    elapsed_seconds: 42,
+    threshold_seconds: 30,
+    title: 'Blue Room',
   },
   configuration: {
     MUSIC_DIR: 'data/music',
@@ -291,6 +295,8 @@ describe('Dashboard', () => {
     expect(screen.getAllByRole('button', { name: 'Run Air' }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('button', { name: 'Stop Air' })).toBeInTheDocument();
     expect(screen.getByText('Start Icecast Air')).toBeInTheDocument();
+    expect(screen.getByText('Playback Watch')).toBeInTheDocument();
+    expect(screen.getByText('Stuck: Blue Room')).toBeInTheDocument();
     expect(screen.queryByText('Weather')).toBeNull();
     expect(screen.queryByText('No weather data.')).toBeNull();
     expect(screen.getByText('Runtime Watch')).toBeInTheDocument();

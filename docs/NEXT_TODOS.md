@@ -228,7 +228,7 @@ Acceptance:
 
 ## P2 - Long-Run Reliability
 
-- [ ] Add a watchdog for stuck playback.
+- [x] Add a watchdog for stuck playback.
 - [x] Add a watchdog for stale announcement buffer.
 - [x] Add a watchdog for Liquidsoap process exit.
 - [x] Add a watchdog for Icecast mount going down.

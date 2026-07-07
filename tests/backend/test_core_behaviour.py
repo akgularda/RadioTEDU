@@ -784,6 +784,25 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual(1, watchdog["icecast_mount_down"])
             self.assertTrue(result["database_vacuumed"])
 
+    def test_playback_watchdog_reports_stuck_now_playing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            track = root / "track.wav"
+            make_wav(track)
+            from backend.playback import PlaybackController
+
+            playback = PlaybackController(settings)
+            playback.add(QueueItem("track", "Blue Room", str(track), duration_seconds=0.1, artist="Alice", track_id=1))
+            playback.play_next()
+
+            state = playback.state()
+            watchdog = playback.watchdog_status(grace_seconds=0)
+
+            self.assertIsNotNone(state["started_at"])
+            self.assertEqual(1, watchdog["stuck_playback"])
+            self.assertEqual("Blue Room", watchdog["title"])
+
     def test_weather_context_uses_real_payload_and_is_exposed_in_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self.make_settings(Path(tmp))

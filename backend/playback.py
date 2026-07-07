@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import Settings
@@ -25,6 +26,7 @@ class PlaybackController:
         self.settings = settings
         self.queue: list[QueueItem] = []
         self.now_playing: QueueItem | None = None
+        self.now_started_at: datetime | None = None
         self.running = False
         self.backend = self._backend()
 
@@ -49,13 +51,16 @@ class PlaybackController:
 
     def skip(self) -> None:
         self.now_playing = None
+        self.now_started_at = None
 
     def play_next(self) -> QueueItem | None:
         if not self.queue:
             self.now_playing = None
+            self.now_started_at = None
             return None
         item = self.queue.pop(0)
         self.now_playing = item
+        self.now_started_at = datetime.now(timezone.utc)
         self.running = True
         if self.backend == "simulate":
             time.sleep(min(float(item.duration_seconds or 1), 1.0))
@@ -75,7 +80,7 @@ class PlaybackController:
                 "title": current.title,
                 "artist": current.artist,
                 "file_path": current.file_path,
-                "started_at": None,
+                "started_at": self.now_started_at.isoformat() if self.now_started_at else None,
             }
         return {
             "type": "idle",
@@ -86,3 +91,21 @@ class PlaybackController:
 
     def health(self) -> str:
         return self.backend
+
+    def watchdog_status(self, grace_seconds: float = 30.0) -> dict:
+        if not self.now_playing or not self.now_started_at:
+            return {
+                "stuck_playback": 0,
+                "elapsed_seconds": None,
+                "threshold_seconds": None,
+                "title": None,
+            }
+        elapsed = max(0.0, (datetime.now(timezone.utc) - self.now_started_at).total_seconds())
+        duration = float(self.now_playing.duration_seconds or 0)
+        threshold = max(0.0, duration + max(0.0, float(grace_seconds)))
+        return {
+            "stuck_playback": int(elapsed >= threshold),
+            "elapsed_seconds": round(elapsed, 3),
+            "threshold_seconds": round(threshold, 3),
+            "title": self.now_playing.title,
+        }
