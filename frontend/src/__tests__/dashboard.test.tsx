@@ -200,6 +200,16 @@ const emptyStatus: StatusResponse = {
     playable_track_count: 0,
     last_scan_time: null,
   },
+  air_readiness: {
+    ready: false,
+    reason: 'no_music',
+    readiness: {
+      checklist: {
+        music_library: { ok: false, detail: '0 playable tracks indexed.', severity: 'blocking' },
+      },
+      blocking_failures: ['music_library'],
+    },
+  },
   configuration: {
     MUSIC_DIR: 'data/music',
     OLLAMA_MODEL: 'qwen3.5:4b',
@@ -244,6 +254,8 @@ describe('Dashboard', () => {
     expect(screen.getByText('Ollama runtime is unreachable.')).toBeInTheDocument();
     expect(screen.getByText('Restart Ollama')).toBeInTheDocument();
     expect(screen.getByText('Air Output')).toBeInTheDocument();
+    expect(screen.getByText('Air Readiness')).toBeInTheDocument();
+    expect(screen.getByText('0 playable tracks indexed.')).toBeInTheDocument();
     expect(screen.getByText('Selin / female')).toBeInTheDocument();
     expect(screen.getByText('tr_female_cool')).toBeInTheDocument();
     expect(screen.getAllByText('/ai').length).toBeGreaterThanOrEqual(1);

@@ -302,6 +302,7 @@ def build_status(
         "health": health(settings, agent),
         "liquidsoap": liquidsoap,
         "music_library": music_library_status(settings),
+        "air_readiness": air_start_readiness(settings, agent, prepare_prebuffer=False),
         "configuration": operator_configuration(settings),
         "website_sync": website_sync_health(settings, public_snapshot_pusher),
         "setup": {
@@ -311,25 +312,94 @@ def build_status(
     }
 
 
-def air_start_readiness(settings: Settings, agent: RadioAgent) -> dict:
+def air_start_readiness(settings: Settings, agent: RadioAgent, prepare_prebuffer: bool = True) -> dict:
+    checklist: dict[str, dict] = {}
     library = music_library_status(settings)
+    checklist["music_library"] = _readiness_item(
+        library["playable_track_count"] > 0,
+        f"{library['playable_track_count']} playable tracks indexed.",
+        "blocking",
+    )
     if library["playable_track_count"] <= 0:
-        return {"ready": False, "reason": "no_music", "music_library": library}
+        return {"ready": False, "reason": "no_music", "music_library": library, "readiness": {"checklist": checklist}}
     program = current_program(settings)
-    buffer_state = agent.ensure_announcement_prebuffer(program["id"])
+    buffer_state = (
+        agent.ensure_announcement_prebuffer(program["id"])
+        if prepare_prebuffer
+        else agent.announcement_readiness(program["id"])
+    )
+    checklist["announcement_prebuffer"] = _readiness_item(
+        buffer_state["ready_to_broadcast"],
+        f"{buffer_state['ready']} / {buffer_state['required']} ready announcements.",
+        "blocking",
+    )
+    tts_provider = getattr(agent.tts, "provider_name", settings.tts_provider)
+    checklist["tts"] = _readiness_item(
+        not str(tts_provider).startswith("dummy"),
+        f"TTS provider: {tts_provider}.",
+        "warning",
+    )
+    liquidsoap = liquidsoap_status(settings)
+    checklist["liquidsoap_command"] = _readiness_item(
+        (not settings.liquidsoap_enabled) or liquidsoap["command_found"],
+        f"Liquidsoap command {settings.liquidsoap_command!r} is {'available' if liquidsoap['command_found'] else 'missing'}.",
+        "blocking",
+    )
+    checklist["liquidsoap_queue"] = _readiness_item(
+        (not settings.liquidsoap_enabled) or liquidsoap["queue_exists"],
+        f"Queue file: {liquidsoap['queue_path']} ({liquidsoap['queue_length']} items).",
+        "blocking",
+    )
+    checklist["icecast_mount"] = _readiness_item(
+        (not settings.liquidsoap_enabled) or liquidsoap["mount_active"],
+        f"Icecast mount {liquidsoap['icecast_url']} is {'active' if liquidsoap['mount_active'] else 'not active'}.",
+        "warning",
+    )
+    checklist["public_sync"] = _readiness_item(
+        bool(settings.public_sync_url and settings.public_sync_token),
+        "Public snapshot sync configured." if settings.public_sync_url and settings.public_sync_token else "Public snapshot sync is not configured.",
+        "warning",
+    )
+    blocking_failures = [name for name, item in checklist.items() if not item["ok"] and item["severity"] == "blocking"]
+    if "liquidsoap_command" in blocking_failures:
+        return {
+            "ready": False,
+            "reason": "liquidsoap_not_ready",
+            "music_library": library,
+            "announcement_buffer": buffer_state,
+            "liquidsoap": liquidsoap,
+            "stream": {"reason": "liquidsoap_missing", **liquidsoap},
+            "readiness": {"checklist": checklist, "blocking_failures": blocking_failures},
+        }
+    if "liquidsoap_queue" in blocking_failures:
+        return {
+            "ready": False,
+            "reason": "liquidsoap_queue_not_ready",
+            "music_library": library,
+            "announcement_buffer": buffer_state,
+            "liquidsoap": liquidsoap,
+            "readiness": {"checklist": checklist, "blocking_failures": blocking_failures},
+        }
     if not buffer_state["ready_to_broadcast"]:
         return {
             "ready": False,
             "reason": "announcement_prebuffer_not_ready",
             "music_library": library,
             "announcement_buffer": buffer_state,
+            "readiness": {"checklist": checklist, "blocking_failures": blocking_failures},
         }
     return {
         "ready": True,
         "reason": "ready",
         "music_library": library,
         "announcement_buffer": buffer_state,
+        "liquidsoap": liquidsoap,
+        "readiness": {"checklist": checklist, "blocking_failures": blocking_failures},
     }
+
+
+def _readiness_item(ok: bool, detail: str, severity: str) -> dict:
+    return {"ok": bool(ok), "detail": detail, "severity": severity}
 
 
 def music_library_status(settings: Settings) -> dict:

@@ -186,6 +186,15 @@ export interface MusicLibraryStats {
   last_scan_time: string | null;
 }
 
+export interface AirReadiness {
+  ready: boolean;
+  reason: string;
+  readiness: {
+    checklist: Record<string, { ok: boolean; detail: string; severity: string }>;
+    blocking_failures?: string[];
+  };
+}
+
 export interface OperatorConfiguration {
   MUSIC_DIR: string;
   OLLAMA_MODEL: string;
@@ -249,6 +258,7 @@ export interface StatusResponse {
   orchestrator: OrchestratorState;
   liquidsoap: LiquidsoapState;
   music_library: MusicLibraryStats;
+  air_readiness: AirReadiness;
   configuration: OperatorConfiguration;
   website_sync: WebsiteSyncHealth;
   setup: SetupState;

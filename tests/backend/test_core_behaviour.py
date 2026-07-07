@@ -280,6 +280,29 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual("no_music", payload["reason"])
             self.assertEqual(0, payload["music_library"]["playable_track_count"])
 
+    def test_air_readiness_blocks_real_air_when_liquidsoap_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.liquidsoap_enabled = True
+            settings.liquidsoap_command = "definitely-missing-liquidsoap"
+            settings.playback_backend = "liquidsoap"
+            settings.min_ready_announcements = 0
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            app = create_app(settings)
+
+            response = TestClient(app).post("/api/air/start")
+            payload = response.json()
+
+            self.assertFalse(payload["started"])
+            self.assertEqual("liquidsoap_not_ready", payload["reason"])
+            checklist = payload["readiness"]["checklist"]
+            self.assertFalse(checklist["liquidsoap_command"]["ok"])
+            self.assertEqual("blocking", checklist["liquidsoap_command"]["severity"])
+            self.assertIn("definitely-missing-liquidsoap", checklist["liquidsoap_command"]["detail"])
+            self.assertEqual("warning", checklist["tts"]["severity"])
+
     def test_liquidsoap_status_reports_operator_health_and_queue_length(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

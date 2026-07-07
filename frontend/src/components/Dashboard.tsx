@@ -234,6 +234,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
           />
         ) : null}
         <QueuePanel queue={status.queue} />
+        <AirReadinessPanel readiness={status.air_readiness} />
         <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
         <MusicLibraryPanel library={status.music_library} />
         <ConfigurationPanel configuration={status.configuration} />
@@ -254,6 +255,27 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function AirReadinessPanel({ readiness }: { readiness: StatusResponse['air_readiness'] }) {
+  const items = Object.entries(readiness.readiness.checklist || {});
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Air Readiness</span>
+        <span>{readiness.ready ? 'Ready' : readiness.reason}</span>
+      </div>
+      <div className="health-grid">
+        {items.map(([name, item]) => (
+          <div key={name}>
+            <span>{name.replace(/_/g, ' ')}</span>
+            <strong>{item.ok ? 'OK' : item.severity}</strong>
+            <small>{item.detail}</small>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

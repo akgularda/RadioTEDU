@@ -26,8 +26,8 @@ Acceptance:
 - [x] Render/check Liquidsoap config.
 - [x] Check Icecast reachability and mount state.
 - [x] Check Ollama and configured Qwen model readiness.
-- [ ] Check TTS command readiness.
-- [ ] Check music library readiness.
+- [x] Check TTS command readiness.
+- [x] Check music library readiness.
 - [ ] Keep running with local-only logs and backoff.
 
 Acceptance:
@@ -84,11 +84,11 @@ Acceptance:
 - [ ] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
 - [ ] Keep deterministic fallback only as a dead-air prevention path.
 - [ ] Add admin visibility:
-  - ready count
-  - required count
-  - queue age
-  - failed generation count
-  - next announcement type
+  - [x] ready count
+  - [x] required count
+  - [ ] queue age
+  - [ ] failed generation count
+  - [ ] next announcement type
 
 Acceptance:
 - Broadcast does not start until at least 5 announcements are ready, unless the user explicitly overrides in a local-only admin action.
