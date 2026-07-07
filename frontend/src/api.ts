@@ -169,6 +169,10 @@ export interface LiquidsoapState {
   queue_length: number;
   mount: string;
   icecast_url: string;
+  icecast_reachable: boolean;
+  mount_active: boolean;
+  icecast_status: number | null;
+  icecast_error: string | null;
 }
 
 export interface SetupState {

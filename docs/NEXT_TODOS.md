@@ -24,7 +24,7 @@ Acceptance:
 - [ ] Start or verify the autonomous orchestrator.
 - [x] Start or verify the public snapshot pusher when configured.
 - [x] Render/check Liquidsoap config.
-- [ ] Check Icecast reachability and mount state.
+- [x] Check Icecast reachability and mount state.
 - [x] Check Ollama and configured Qwen model readiness.
 - [ ] Check TTS command readiness.
 - [ ] Check music library readiness.
@@ -56,8 +56,8 @@ Acceptance:
 
 ## P0 - Complete Real Liquidsoap/Icecast Air Path
 
-- [ ] Make the agent write a real Liquidsoap queue file.
-- [ ] Queue sequence must include prebuffered announcement clips plus real tracks.
+- [x] Make the agent write a real Liquidsoap queue file.
+- [x] Queue sequence must include prebuffered announcement clips plus real tracks.
 - [ ] Use real file paths only locally; never expose them to public snapshot/API.
 - [ ] Verify Liquidsoap can read the queue file.
 - [ ] Verify Icecast mount `/ai` becomes reachable.
@@ -66,8 +66,8 @@ Acceptance:
   - [x] liquidsoap running
   - [x] queue file exists
   - [x] queue length
-  - Icecast reachable
-  - mount active
+  - [x] Icecast reachable
+  - [x] mount active
 - [ ] Add a smoke test script for local stream readiness.
 
 Acceptance:

@@ -298,6 +298,58 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual(2, status["queue_length"])
             self.assertTrue(status["queue_exists"])
 
+    def test_liquidsoap_status_reports_icecast_mount_health(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.liquidsoap_enabled = True
+            settings.liquidsoap_host = "127.0.0.1"
+            settings.liquidsoap_port = 8001
+            settings.liquidsoap_mount = "/ai"
+            settings.liquidsoap_queue_path = str(root / "liquidsoap" / "queue.m3u")
+            settings.liquidsoap_script_path = str(root / "liquidsoap" / "radiotedu.liq")
+            render_liquidsoap_config(settings)
+
+            from backend.liquidsoap import liquidsoap_status
+
+            status = liquidsoap_status(
+                settings,
+                icecast_checker=lambda url, timeout=0.5: {
+                    "reachable": True,
+                    "mount_active": True,
+                    "status": 200,
+                    "url": url,
+                },
+            )
+
+            self.assertTrue(status["icecast_reachable"])
+            self.assertTrue(status["mount_active"])
+            self.assertEqual("http://127.0.0.1:8001/ai", status["icecast_url"])
+
+    def test_liquidsoap_backend_writes_tts_then_track_to_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.playback_backend = "liquidsoap"
+            settings.liquidsoap_queue_path = str(root / "liquidsoap" / "queue.m3u")
+            settings.liquidsoap_script_path = str(root / "liquidsoap" / "radiotedu.liq")
+            tts = root / "tts" / "intro.wav"
+            track = root / "music" / "Alice - Blue Room.wav"
+            make_wav(tts)
+            make_wav(track)
+
+            from backend.playback import PlaybackController
+
+            playback = PlaybackController(settings)
+            playback.add(QueueItem("tts", "RadioTEDU DJ", str(tts), duration_seconds=1.0))
+            playback.add(QueueItem("track", "Blue Room", str(track), duration_seconds=1.0, artist="Alice", track_id=1))
+
+            playback.play_next()
+            playback.play_next()
+
+            queued = Path(settings.liquidsoap_queue_path).read_text(encoding="utf-8").splitlines()
+            self.assertEqual([str(tts.resolve()), str(track.resolve())], queued)
+
     def test_status_exposes_operator_library_config_and_public_sync_health(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

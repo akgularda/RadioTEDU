@@ -72,6 +72,7 @@ def print_readiness(readiness: dict) -> None:
     print(f"- Music: {readiness['music_dir']}")
     print(f"- Ollama: {readiness['ollama'].get('status')}")
     print(f"- Liquidsoap: {readiness['liquidsoap'].get('health')}")
+    print(f"- Icecast mount: {'active' if readiness['liquidsoap'].get('mount_active') else 'inactive'}")
     print(f"- Public sync: {'configured' if readiness['public_sync']['configured'] else 'not configured'}")
     if readiness["scan"]:
         print(f"- Scan indexed: {readiness['scan'].get('tracks_indexed', 0)}")

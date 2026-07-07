@@ -447,6 +447,10 @@ function AirOutputPanel({
           <strong>{liquidsoap.icecast_url}</strong>
         </div>
         <div>
+          <span>Mount</span>
+          <strong>{liquidsoap.mount_active ? 'Active' : liquidsoap.icecast_reachable ? 'Inactive' : 'Unreachable'}</strong>
+        </div>
+        <div>
           <span>Liquidsoap</span>
           <strong>{liquidsoap.command_found ? liquidsoap.command : 'Not installed'}</strong>
         </div>

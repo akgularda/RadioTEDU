@@ -4,6 +4,8 @@ import os
 import shutil
 import signal
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from .config import Settings
@@ -49,7 +51,7 @@ output.icecast(
     }
 
 
-def liquidsoap_status(settings: Settings) -> dict:
+def liquidsoap_status(settings: Settings, icecast_checker=None) -> dict:
     pid_path = liquidsoap_pid_path(settings)
     command_path = shutil.which(settings.liquidsoap_command)
     pid = _read_pid(pid_path)
@@ -68,6 +70,9 @@ def liquidsoap_status(settings: Settings) -> dict:
         health = "ready"
     else:
         health = "missing"
+    mount = settings.liquidsoap_mount if settings.liquidsoap_mount.startswith("/") else f"/{settings.liquidsoap_mount}"
+    icecast_url = f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{mount}"
+    icecast = _check_icecast_mount(icecast_url, checker=icecast_checker)
     return {
         "enabled": settings.liquidsoap_enabled,
         "health": health,
@@ -81,8 +86,12 @@ def liquidsoap_status(settings: Settings) -> dict:
         "queue_path": settings.liquidsoap_queue_path,
         "queue_exists": queue_exists,
         "queue_length": queue_length,
-        "mount": settings.liquidsoap_mount if settings.liquidsoap_mount.startswith("/") else f"/{settings.liquidsoap_mount}",
-        "icecast_url": f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{settings.liquidsoap_mount if settings.liquidsoap_mount.startswith('/') else '/' + settings.liquidsoap_mount}",
+        "mount": mount,
+        "icecast_url": icecast_url,
+        "icecast_reachable": icecast["reachable"],
+        "mount_active": icecast["mount_active"],
+        "icecast_status": icecast["status"],
+        "icecast_error": icecast.get("error"),
     }
 
 
@@ -129,6 +138,19 @@ def _queue_length(path: Path) -> int:
         return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
     except OSError:
         return 0
+
+
+def _check_icecast_mount(url: str, checker=None) -> dict:
+    if checker:
+        return checker(url, timeout=0.5)
+    request = urllib.request.Request(url, method="GET", headers={"User-Agent": "RadioTEDU-Icecast-Check/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=0.5) as response:
+            return {"reachable": True, "mount_active": response.status in {200, 206}, "status": response.status, "url": url}
+    except urllib.error.HTTPError as exc:
+        return {"reachable": True, "mount_active": False, "status": exc.code, "url": url, "error": str(exc)}
+    except OSError as exc:
+        return {"reachable": False, "mount_active": False, "status": None, "url": url, "error": str(exc)}
 
 
 def _read_pid(path: Path) -> int | None:

@@ -190,6 +190,10 @@ const emptyStatus: StatusResponse = {
     queue_length: 0,
     mount: '/ai',
     icecast_url: 'http://127.0.0.1:8001/ai',
+    icecast_reachable: false,
+    mount_active: false,
+    icecast_status: null,
+    icecast_error: 'connection refused',
   },
   music_library: {
     total_indexed_tracks: 0,
