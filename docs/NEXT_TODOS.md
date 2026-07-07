@@ -96,7 +96,7 @@ Acceptance:
 
 ## P1 - Finish Qwen TTS Voice Routing
 
-- [ ] Document a working `QWEN_TTS_COMMAND` example.
+- [x] Document a working `QWEN_TTS_COMMAND` example.
 - [x] Pass program voice/personality into the TTS command.
 - [x] Support female/male voice mapping per program host.
 - [x] Show TTS provider health in admin panel.
