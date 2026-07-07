@@ -7,7 +7,7 @@ import {
   Square,
   Pencil,
 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 
 import { patchJson, postControl, type Program, type StatusResponse } from '../api';
 
@@ -67,6 +67,29 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
   async function stopAir() {
     await control('/api/air/stop');
   }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === 'r') {
+        event.preventDefault();
+        void runAir();
+      } else if (key === 's') {
+        event.preventDefault();
+        void stopAir();
+      } else if (key === 'k') {
+        event.preventDefault();
+        void control('/api/control/skip');
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 
   async function submitSayNow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

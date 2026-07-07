@@ -220,7 +220,7 @@ Acceptance:
   - Prebuffer
   - Website sync
 - [x] Add an explicit “local only” label for admin-only data.
-- [ ] Add keyboard-safe controls for Run/Stop/Skip.
+- [x] Add keyboard-safe controls for Run/Stop/Skip.
 - [ ] Add confirmation for destructive or disruptive actions.
 
 Acceptance:

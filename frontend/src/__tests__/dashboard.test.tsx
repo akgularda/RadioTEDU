@@ -446,6 +446,22 @@ describe('Dashboard', () => {
     fetchMock.mockRestore();
   });
 
+  it('supports keyboard-safe Run, Stop, and Skip controls', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ started: true }),
+    } as unknown as Response);
+
+    render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
+    await user.keyboard('rsk');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/air/start', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/api/air/stop', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/api/control/skip', expect.anything());
+    fetchMock.mockRestore();
+  });
+
   it('sends program edits through the API', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);
