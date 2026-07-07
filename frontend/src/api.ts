@@ -106,12 +106,22 @@ export interface LlmSetupHealth extends LlmRuntimeHealth {
   suggested_commands: string[];
 }
 
+export interface TtsRuntimeHealth {
+  provider: string;
+  active_provider: string;
+  status: string;
+  configured: boolean;
+  command_configured?: boolean;
+  last_error: string | null;
+}
+
 export interface SystemHealth {
   database: string;
   llm: string;
   llm_runtime: LlmRuntimeHealth;
   llm_setup: LlmSetupHealth;
   tts: string;
+  tts_runtime: TtsRuntimeHealth;
   search: string;
   weather: string;
   playback: string;

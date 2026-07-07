@@ -187,6 +187,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def say(request: SayRequest) -> dict:
         return agent.say(request.text)
 
+    @app.post("/api/tts/test")
+    def tts_test(payload: dict = Body(default_factory=dict)) -> dict:
+        program_id = str(payload.get("program_id") or current_program(settings)["id"])
+        return test_tts(settings, agent, program_id)
+
     @app.post("/api/control/search")
     def search(request: SearchRequest) -> dict:
         provider = SearXNGSearchProvider(settings.searxng_url) if settings.search_provider == "searxng" else RSSSearchProvider(settings.rss_feeds_path)
@@ -442,6 +447,38 @@ def operator_configuration(settings: Settings) -> dict:
     }
 
 
+def test_tts(settings: Settings, agent: RadioAgent, program_id: str) -> dict:
+    with connect(settings) as conn:
+        row = conn.execute("select * from programs where id=?", (program_id,)).fetchone()
+    program = dict(row) if row else current_program(settings)
+    voice = program.get("voice") or ""
+    host = program.get("host_name") or "RadioTEDU"
+    text = f"RadioTEDU TTS test. {host} voice check for {program.get('name', 'current program')}."
+    output = settings.tts_path / f"tts_test_{program.get('id', 'program')}.wav"
+    try:
+        file_path = agent.tts.synthesize(text, str(output), voice=voice)
+        ok = Path(file_path).exists()
+        provider = getattr(agent.tts, "provider_name", settings.tts_provider)
+        health_info = agent.tts.health() if hasattr(agent.tts, "health") else {"active_provider": provider, "status": "unknown"}
+        return {
+            "ok": ok,
+            "provider": provider.split("->")[-1] if provider.startswith("qwen->") else provider,
+            "active_provider": provider,
+            "voice": voice,
+            "program_id": program.get("id"),
+            "file_path": file_path,
+            "health": health_info,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "provider": getattr(agent.tts, "provider_name", settings.tts_provider),
+            "voice": voice,
+            "program_id": program.get("id"),
+            "error": str(exc),
+        }
+
+
 def website_sync_health(settings: Settings, public_snapshot_pusher: PublicSnapshotPusher | None = None) -> dict:
     configured = bool(settings.public_sync_url and settings.public_sync_token)
     pusher_status = public_snapshot_pusher.status() if public_snapshot_pusher else None
@@ -655,6 +692,13 @@ def health(settings: Settings, agent: RadioAgent) -> dict:
         "llm_runtime": llm_runtime,
         "llm_setup": llm_setup,
         "tts": getattr(agent.tts, "provider_name", settings.tts_provider),
+        "tts_runtime": agent.tts.health() if hasattr(agent.tts, "health") else {
+            "provider": settings.tts_provider,
+            "active_provider": getattr(agent.tts, "provider_name", settings.tts_provider),
+            "status": "unknown",
+            "configured": False,
+            "last_error": None,
+        },
         "search": settings.search_provider,
         "weather": settings.weather_provider if settings.weather_enabled else "disabled",
         "playback": agent.playback.health(),

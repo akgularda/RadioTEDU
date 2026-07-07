@@ -123,6 +123,14 @@ const emptyStatus: StatusResponse = {
       error: 'connection refused',
     },
     tts: 'dummy',
+    tts_runtime: {
+      provider: 'qwen',
+      active_provider: 'dummy',
+      status: 'fallback',
+      configured: false,
+      command_configured: false,
+      last_error: null,
+    },
     search: 'ok',
     weather: 'disabled',
     playback: 'simulate',
@@ -256,6 +264,8 @@ describe('Dashboard', () => {
     expect(screen.getByText('Air Output')).toBeInTheDocument();
     expect(screen.getByText('Air Readiness')).toBeInTheDocument();
     expect(screen.getByText('0 playable tracks indexed.')).toBeInTheDocument();
+    expect(screen.getByText('TTS')).toBeInTheDocument();
+    expect(screen.getByText('fallback / dummy')).toBeInTheDocument();
     expect(screen.getByText('Selin / female')).toBeInTheDocument();
     expect(screen.getByText('tr_female_cool')).toBeInTheDocument();
     expect(screen.getAllByText('/ai').length).toBeGreaterThanOrEqual(1);
@@ -350,6 +360,7 @@ describe('Dashboard', () => {
     await user.type(screen.getByLabelText('Announcement text'), 'A short RadioTEDU bulletin');
     await user.click(screen.getByRole('button', { name: 'Send announcement' }));
     await user.click(screen.getByRole('button', { name: 'Generate Covers' }));
+    await user.click(screen.getByRole('button', { name: 'Test TTS' }));
 
     expect(fetchMock).toHaveBeenCalledWith('/api/control/say', {
       method: 'POST',
@@ -360,6 +371,11 @@ describe('Dashboard', () => {
       method: 'POST',
       headers: undefined,
       body: undefined,
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/tts/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ program_id: 'night_lab' }),
     });
     fetchMock.mockRestore();
   });

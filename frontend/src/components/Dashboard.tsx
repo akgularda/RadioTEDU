@@ -236,6 +236,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         <QueuePanel queue={status.queue} />
         <AirReadinessPanel readiness={status.air_readiness} />
         <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
+        <TtsPanel health={status.health.tts_runtime} currentProgramId={currentProgram?.id || null} onCommand={control} />
         <MusicLibraryPanel library={status.music_library} />
         <ConfigurationPanel configuration={status.configuration} />
         <WebsiteSyncPanel sync={status.website_sync} />
@@ -493,6 +494,45 @@ function AirOutputPanel({
         <button type="button" onClick={() => onCommand('/api/liquidsoap/stop')}>
           <Square size={15} />
           Stop Icecast Air
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function TtsPanel({
+  health,
+  currentProgramId,
+  onCommand,
+}: {
+  health: StatusResponse['health']['tts_runtime'];
+  currentProgramId: string | null;
+  onCommand: (path: string, body?: unknown) => Promise<unknown>;
+}) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>TTS</span>
+        <span>{health.status} / {health.active_provider}</span>
+      </div>
+      <div className="health-grid">
+        <div>
+          <span>Provider</span>
+          <strong>{health.provider}</strong>
+        </div>
+        <div>
+          <span>Command</span>
+          <strong>{health.command_configured ? 'Configured' : 'Not configured'}</strong>
+        </div>
+        <div>
+          <span>Last Error</span>
+          <strong>{health.last_error || 'No data'}</strong>
+        </div>
+      </div>
+      <div className="strategy-actions">
+        <button type="button" onClick={() => onCommand('/api/tts/test', { program_id: currentProgramId })}>
+          <Play size={15} />
+          Test TTS
         </button>
       </div>
     </section>
@@ -819,13 +859,18 @@ function SystemHealth({ health }: { health: StatusResponse['health'] }) {
 
 function formatHealthValue(key: string, value: StatusResponse['health'][keyof StatusResponse['health']]) {
   if (key === 'llm_runtime' && typeof value === 'object' && value !== null) {
-    return `${value.status} (${value.configured_model})`;
+    const runtime = value as StatusResponse['health']['llm_runtime'];
+    return `${runtime.status} (${runtime.configured_model})`;
   }
   if (key === 'llm_setup' && typeof value === 'object' && value !== null && 'suggested_commands' in value) {
     const setup = value as StatusResponse['health']['llm_setup'];
     const pullCommand = setup.suggested_commands.find((command) => command.startsWith('ollama pull'));
     const command = pullCommand ?? setup.suggested_commands[0];
     return command ? `${setup.status}: ${command}` : `${setup.status}: ${setup.summary}`;
+  }
+  if (key === 'tts_runtime' && typeof value === 'object' && value !== null) {
+    const tts = value as StatusResponse['health']['tts_runtime'];
+    return `${tts.status}: ${tts.active_provider}`;
   }
   return String(value);
 }

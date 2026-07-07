@@ -649,6 +649,29 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertTrue(output.exists())
             self.assertEqual("A short RadioTEDU line.", output.with_suffix(".txt").read_text(encoding="utf-8"))
 
+    def test_qwen_tts_health_reports_missing_command_and_test_endpoint_uses_program_voice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.tts_provider = "qwen"
+            settings.qwen_tts_command = ""
+            app = create_app(settings)
+            client = TestClient(app)
+
+            status = client.get("/api/status").json()
+            self.assertEqual("fallback", status["health"]["tts_runtime"]["status"])
+            self.assertEqual("dummy", status["health"]["tts_runtime"]["active_provider"])
+
+            response = client.post("/api/tts/test", json={"program_id": "night_lab"})
+            payload = response.json()
+
+            self.assertEqual(200, response.status_code)
+            self.assertTrue(payload["ok"])
+            self.assertEqual("tr_female_cool", payload["voice"])
+            self.assertEqual("dummy", payload["provider"])
+            self.assertTrue(Path(payload["file_path"]).exists())
+            self.assertIn("Selin", Path(payload["file_path"]).with_suffix(".txt").read_text(encoding="utf-8"))
+
     def test_weather_context_uses_real_payload_and_is_exposed_in_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self.make_settings(Path(tmp))
