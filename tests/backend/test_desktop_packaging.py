@@ -128,5 +128,6 @@ def test_required_local_streaming_and_sync_helpers_exist() -> None:
     assert "urllib.request" in icecast_checker
     assert "X-RadioTEDU-Sync-Token" in snapshot_pusher
     assert "PUBLIC_SYNC_URL" in snapshot_pusher
+    assert "manual/debug" in snapshot_pusher
     assert 'mount="/ai"' in liq_template
     assert "playlist" in liq_template

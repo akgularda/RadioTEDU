@@ -39,9 +39,9 @@ Acceptance:
 
 - [x] Start `PublicSnapshotPusher` automatically on backend startup when `PUBLIC_SYNC_URL` and `PUBLIC_SYNC_TOKEN` are configured.
 - [x] Stop the pusher cleanly on backend shutdown.
-- [ ] Keep `scripts/push_public_snapshot.py` as a manual/debug tool.
+- [x] Keep `scripts/push_public_snapshot.py` as a manual/debug tool.
 - [x] Add exponential backoff for repeated website sync failures.
-- [ ] Add admin status fields:
+- [x] Add admin status fields:
   - [x] last snapshot push time
   - [x] last snapshot push result
   - [x] consecutive failures

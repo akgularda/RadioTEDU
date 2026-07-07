@@ -13,7 +13,7 @@ SYNC_TOKEN_HEADER = "X-RadioTEDU-Sync-Token"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Push sanitized RadioTEDU public snapshots to the website server.")
+    parser = argparse.ArgumentParser(description="manual/debug tool for pushing sanitized RadioTEDU public snapshots to the website server.")
     parser.add_argument("--once", action="store_true", help="Push one snapshot and exit.")
     parser.add_argument("--interval", type=int, default=0, help="Override PUBLIC_SYNC_INTERVAL_SECONDS.")
     parser.epilog = f"Requires PUBLIC_SYNC_URL, PUBLIC_SYNC_TOKEN, and sends {SYNC_TOKEN_HEADER}."
