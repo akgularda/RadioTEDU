@@ -14,7 +14,7 @@ from backend.liquidsoap import render_liquidsoap_config
 from backend.llm import build_user_prompt, choose_track_with_llm, ollama_runtime_status
 from backend.music_library import iter_audio_files, scan_music
 from backend.playback import QueueItem
-from backend.public_dashboard import public_snapshot_from_state
+from backend.public_dashboard import PublicSnapshotPusher, public_snapshot_from_state
 from backend.tts.dummy_tts import DummyTTSProvider
 from backend.weather.open_meteo import OpenMeteoWeatherProvider
 
@@ -162,6 +162,24 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertIsNone(app.state.public_snapshot_pusher)
             with TestClient(app):
                 self.assertIsNone(app.state.public_snapshot_pusher)
+
+    def test_public_snapshot_push_failure_does_not_stop_local_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.public_sync_url = "http://127.0.0.1:9/api/public/snapshot"
+            settings.public_sync_token = "secret-token"
+            app = create_app(settings)
+            pusher = PublicSnapshotPusher(settings, app.state.agent)
+            pusher.last_push_at = 0
+
+            result = pusher.maybe_push()
+
+            self.assertFalse(result["pushed"])
+            self.assertEqual("push_failed", result["reason"])
+            self.assertEqual(1, pusher.status()["consecutive_failures"])
+            response = TestClient(app).get("/api/status")
+            self.assertEqual(200, response.status_code)
+            self.assertEqual("idle", response.json()["channel"]["status"])
 
     def test_public_snapshot_from_state_includes_dossier_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

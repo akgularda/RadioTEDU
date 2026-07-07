@@ -47,7 +47,7 @@ Acceptance:
   - [x] consecutive failures
   - [x] configured/not configured
 - [x] Add tests that verify no pusher starts without token/url.
-- [ ] Add tests that verify snapshot push failure does not stop broadcast.
+- [x] Add tests that verify snapshot push failure does not stop broadcast.
 
 Acceptance:
 - Broadcast backend pushes sanitized public state every 5-10 seconds when configured.
