@@ -695,6 +695,8 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
                 ).fetchone()
             metadata = json.loads(row["metadata_json"])
             self.assertEqual("Blue Room", metadata["track_title"])
+            self.assertTrue(metadata["used_fallback"])
+            self.assertEqual("dead_air_prevention", metadata["fallback_role"])
             self.assertIn("hard bop", row["text"])
             self.assertLessEqual(len(row["text"].split()), 24)
 

@@ -359,6 +359,7 @@ class RadioAgent:
                 "track_genre": selected.get("genre"),
                 "decision_reason": choice.reason,
                 "used_fallback": choice.used_fallback,
+                "fallback_role": "dead_air_prevention" if choice.used_fallback else None,
             },
         }
 

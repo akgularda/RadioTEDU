@@ -82,7 +82,7 @@ Acceptance:
 - [x] Generate announcements 4-5 songs ahead.
 - [x] Do not block playback while waiting for the LLM.
 - [x] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
-- [ ] Keep deterministic fallback only as a dead-air prevention path.
+- [x] Keep deterministic fallback only as a dead-air prevention path.
 - [ ] Add admin visibility:
   - [x] ready count
   - [x] required count
