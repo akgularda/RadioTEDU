@@ -48,6 +48,8 @@ class AutonomousOrchestratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             settings = self.make_settings(root)
+            settings.min_ready_announcements = 1
+            settings.max_ready_announcements = 1
             make_wav(root / "music" / "Alice - Blue Room.wav")
             scan_music(settings)
             orchestrator = AutonomousOrchestrator(settings, RadioAgent(settings))

@@ -153,7 +153,10 @@ const emptyStatus: StatusResponse = {
       used: 0,
       failed: 0,
       required: 5,
+      target: 8,
       ready_to_broadcast: false,
+      oldest_ready_age_seconds: null,
+      next_announcement_type: null,
     },
     generated_clips: 0,
     recent_errors: [],
@@ -289,7 +292,10 @@ describe('Dashboard', () => {
     expect(screen.getByText('Runtime Watch')).toBeInTheDocument();
     expect(screen.getByText('unreachable (qwen3.5:4b)')).toBeInTheDocument();
     expect(screen.getByText('cli_missing: ollama pull qwen3.5:4b')).toBeInTheDocument();
-    expect(screen.getByText('0 / 5')).toBeInTheDocument();
+    expect(screen.getByText('0/5')).toBeInTheDocument();
+    expect(screen.getByText('0 / 8')).toBeInTheDocument();
+    expect(screen.getByText('minimum 5')).toBeInTheDocument();
+    expect(screen.getByText('Next Announcement')).toBeInTheDocument();
     expect(screen.getByText('Edit')).toBeInTheDocument();
     expect(screen.queryByText(/support|balance|money|donation|payment|revenue|profit/i)).toBeNull();
     expect(screen.queryByText(/OpenAIR|Grok and Roll|Backlink Broadcast|Thinking Frequencies/i)).toBeNull();

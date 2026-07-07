@@ -159,9 +159,52 @@ class RadioAgent:
                     "select count(*) from announcement_queue where status='ready' and (program_id=? or program_id is null)",
                     (program_id,),
                 ).fetchone()[0]
+                used = conn.execute(
+                    "select count(*) from announcement_queue where status='used' and (program_id=? or program_id is null)",
+                    (program_id,),
+                ).fetchone()[0]
+                failed = conn.execute(
+                    "select count(*) from announcement_queue where status='failed' and (program_id=? or program_id is null)",
+                    (program_id,),
+                ).fetchone()[0]
+                oldest_ready = conn.execute(
+                    """
+                    select created_at from announcement_queue
+                    where status='ready' and (program_id=? or program_id is null)
+                    order by created_at asc, id asc
+                    limit 1
+                    """,
+                    (program_id,),
+                ).fetchone()
+                next_ready = conn.execute(
+                    """
+                    select metadata_json from announcement_queue
+                    where status='ready' and (program_id=? or program_id is null)
+                    order by created_at asc, id asc
+                    limit 1
+                    """,
+                    (program_id,),
+                ).fetchone()
             else:
                 ready = conn.execute("select count(*) from announcement_queue where status='ready'").fetchone()[0]
-        return {"ready": int(ready), "required": required, "ready_to_broadcast": int(ready) >= required}
+                used = conn.execute("select count(*) from announcement_queue where status='used'").fetchone()[0]
+                failed = conn.execute("select count(*) from announcement_queue where status='failed'").fetchone()[0]
+                oldest_ready = conn.execute(
+                    "select created_at from announcement_queue where status='ready' order by created_at asc, id asc limit 1"
+                ).fetchone()
+                next_ready = conn.execute(
+                    "select metadata_json from announcement_queue where status='ready' order by created_at asc, id asc limit 1"
+                ).fetchone()
+        return {
+            "ready": int(ready),
+            "used": int(used),
+            "failed": int(failed),
+            "required": required,
+            "target": max(required, int(self.settings.max_ready_announcements)),
+            "ready_to_broadcast": int(ready) >= required,
+            "oldest_ready_age_seconds": self._age_seconds(oldest_ready["created_at"] if oldest_ready else None),
+            "next_announcement_type": self._announcement_type(next_ready["metadata_json"] if next_ready else None),
+        }
 
     def ensure_announcement_prebuffer(self, program_id: str | None = None, max_to_prepare: int | None = None) -> dict:
         required = max(0, int(self.settings.min_ready_announcements))
@@ -176,10 +219,13 @@ class RadioAgent:
             return readiness
         planned_track_ids = self._ready_announcement_track_ids(target_program_id)
         prepared_count = 0
-        while readiness["ready"] < required and readiness["ready"] < maximum:
+        target_ready = required if max_to_prepare is not None else maximum
+        while readiness["ready"] < target_ready and readiness["ready"] < maximum:
             if max_to_prepare is not None and prepared_count >= max(0, int(max_to_prepare)):
                 break
             prepared = self._prepare_announcement(program, readiness["ready"] + 1, required, planned_track_ids)
+            if prepared is None:
+                break
             text = prepared["text"]
             metadata = prepared["metadata"]
             track_id = metadata.get("track_id")
@@ -216,6 +262,32 @@ class RadioAgent:
             prepared_count += 1
         return readiness
 
+    def _age_seconds(self, created_at: str | None) -> int | None:
+        if not created_at:
+            return None
+        try:
+            created = datetime.fromisoformat(created_at)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            return max(0, int((datetime.now(timezone.utc) - created).total_seconds()))
+        except Exception:
+            return None
+
+    def _announcement_type(self, metadata_json: str | None) -> str | None:
+        if not metadata_json:
+            return None
+        try:
+            metadata = json.loads(metadata_json or "{}")
+        except Exception:
+            return "unknown"
+        if metadata.get("kind"):
+            return str(metadata["kind"])[:40]
+        if metadata.get("track_id") is not None:
+            return "song"
+        if metadata.get("prebuffer"):
+            return "program"
+        return "unknown"
+
     def _consume_ready_announcement(self, program_id: str) -> dict | None:
         with connect(self.settings) as conn:
             row = conn.execute(
@@ -239,12 +311,14 @@ class RadioAgent:
             f"{program.get('name', 'RadioTEDU')} için kısa, sakin ve yerel bir geçiş."
         )
 
-    def _prepare_announcement(self, program: dict, index: int, required: int, planned_track_ids: set[int]) -> dict:
+    def _prepare_announcement(self, program: dict, index: int, required: int, planned_track_ids: set[int]) -> dict | None:
         news = self._news_announcement(program)
         if news:
             return news
         candidates = self._candidates(program, exclude_track_ids=planned_track_ids)
         if not candidates:
+            if self._has_tracks():
+                return None
             return {
                 "text": self._prebuffer_announcement_text(program, index, required),
                 "metadata": {"program": program.get("name"), "prebuffer": True},

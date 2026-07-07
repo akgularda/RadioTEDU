@@ -77,18 +77,18 @@ Acceptance:
 
 ## P0 - Harden Announcement Prebuffer
 
-- [ ] Treat `MIN_READY_ANNOUNCEMENTS=5` as a true air-readiness gate.
-- [ ] Keep 5-8 ready announcement clips during live operation.
-- [ ] Generate announcements 4-5 songs ahead.
+- [x] Treat `MIN_READY_ANNOUNCEMENTS=5` as a true air-readiness gate.
+- [x] Keep 5-8 ready announcement clips during live operation.
+- [x] Generate announcements 4-5 songs ahead.
 - [ ] Do not block playback while waiting for the LLM.
 - [ ] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
 - [ ] Keep deterministic fallback only as a dead-air prevention path.
 - [ ] Add admin visibility:
   - [x] ready count
   - [x] required count
-  - [ ] queue age
-  - [ ] failed generation count
-  - [ ] next announcement type
+  - [x] queue age
+  - [x] failed generation count
+  - [x] next announcement type
 
 Acceptance:
 - Broadcast does not start until at least 5 announcements are ready, unless the user explicitly overrides in a local-only admin action.

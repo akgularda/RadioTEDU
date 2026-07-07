@@ -156,7 +156,10 @@ export interface RuntimeObservability {
     used: number;
     failed: number;
     required: number;
+    target: number;
     ready_to_broadcast: boolean;
+    oldest_ready_age_seconds: number | null;
+    next_announcement_type: string | null;
   };
   generated_clips: number;
   recent_errors: Array<{ message: string; created_at: string }>;

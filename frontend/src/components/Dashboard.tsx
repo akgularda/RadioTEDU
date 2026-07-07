@@ -828,7 +828,20 @@ function RuntimeWatch({ observability }: { observability: StatusResponse['observ
       <div className="health-grid">
         <div>
           <span>Prebuffer</span>
-          <strong>{prebuffer.ready} / {prebuffer.required}</strong>
+          <strong>{prebuffer.ready} / {prebuffer.target}</strong>
+          <small>minimum {prebuffer.required}</small>
+        </div>
+        <div>
+          <span>Next Announcement</span>
+          <strong>{prebuffer.next_announcement_type || 'No data'}</strong>
+        </div>
+        <div>
+          <span>Oldest Ready</span>
+          <strong>{prebuffer.oldest_ready_age_seconds === null ? 'No data' : formatDuration(prebuffer.oldest_ready_age_seconds)}</strong>
+        </div>
+        <div>
+          <span>Failed</span>
+          <strong>{prebuffer.failed}</strong>
         </div>
         <div>
           <span>Uptime</span>

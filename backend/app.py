@@ -621,10 +621,8 @@ def recent_autonomous_tasks(settings: Settings) -> list[dict]:
 
 def observability(settings: Settings, agent: RadioAgent) -> dict:
     now = datetime.now(timezone.utc)
+    prebuffer = agent.announcement_readiness(current_program(settings)["id"])
     with connect(settings) as conn:
-        ready = conn.execute("select count(*) from announcement_queue where status='ready'").fetchone()[0]
-        used = conn.execute("select count(*) from announcement_queue where status='used'").fetchone()[0]
-        failed = conn.execute("select count(*) from announcement_queue where status='failed'").fetchone()[0]
         generated = conn.execute("select count(*) from generated_clips").fetchone()[0]
         errors = rows_to_dicts(
             conn.execute(
@@ -635,11 +633,14 @@ def observability(settings: Settings, agent: RadioAgent) -> dict:
     return {
         "uptime_seconds": int((now - STARTED_AT).total_seconds()),
         "announcement_prebuffer": {
-            "ready": int(ready),
-            "used": int(used),
-            "failed": int(failed),
-            "required": int(settings.min_ready_announcements),
-            "ready_to_broadcast": int(ready) >= int(settings.min_ready_announcements),
+            "ready": int(prebuffer["ready"]),
+            "used": int(prebuffer["used"]),
+            "failed": int(prebuffer["failed"]),
+            "required": int(prebuffer["required"]),
+            "target": int(prebuffer["target"]),
+            "ready_to_broadcast": bool(prebuffer["ready_to_broadcast"]),
+            "oldest_ready_age_seconds": prebuffer["oldest_ready_age_seconds"],
+            "next_announcement_type": prebuffer["next_announcement_type"],
         },
         "generated_clips": int(generated),
         "recent_errors": errors,

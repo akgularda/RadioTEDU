@@ -254,6 +254,62 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
             self.assertGreaterEqual(result["ready"], 5)
             self.assertTrue(result["ready_to_broadcast"])
 
+    def test_prebuffer_readiness_reports_age_failures_and_next_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = make_settings(Path(tmp))
+            settings.min_ready_announcements = 2
+            init_db(settings)
+            agent = RadioAgent(settings)
+            with connect(settings) as conn:
+                conn.execute(
+                    "insert into announcement_queue (text, file_path, status, program_id, source, created_at, metadata_json) values (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        "news line",
+                        str(Path(tmp) / "news.wav"),
+                        "ready",
+                        "night_lab",
+                        "agent_prebuffer",
+                        "2026-07-05T00:00:00+00:00",
+                        json.dumps({"kind": "news", "prebuffer": True}, ensure_ascii=True),
+                    ),
+                )
+                conn.execute(
+                    "insert into announcement_queue (text, file_path, status, program_id, source, created_at, metadata_json) values (?, ?, ?, ?, ?, ?, ?)",
+                    ("failed line", "", "failed", "night_lab", "agent_prebuffer", "2026-07-05T00:01:00+00:00", "{}"),
+                )
+                conn.execute(
+                    "insert into announcement_queue (text, file_path, status, program_id, source, created_at, metadata_json) values (?, ?, ?, ?, ?, ?, ?)",
+                    ("used line", "", "used", "night_lab", "agent_prebuffer", "2026-07-05T00:02:00+00:00", "{}"),
+                )
+                conn.commit()
+
+            readiness = agent.announcement_readiness("night_lab")
+
+            self.assertEqual(1, readiness["ready"])
+            self.assertEqual(1, readiness["failed"])
+            self.assertEqual(1, readiness["used"])
+            self.assertEqual("news", readiness["next_announcement_type"])
+            self.assertIsNotNone(readiness["oldest_ready_age_seconds"])
+            self.assertFalse(readiness["ready_to_broadcast"])
+
+    def test_full_prebuffer_refill_targets_maximum_ready_announcements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = make_settings(root)
+            settings.min_ready_announcements = 2
+            settings.max_ready_announcements = 4
+            for index in range(6):
+                make_wav(root / "music" / f"Artist {index} - Track {index}.wav")
+            scan_music(settings)
+            force_night_lab(settings)
+            agent = RadioAgent(settings)
+
+            readiness = agent.ensure_announcement_prebuffer("night_lab")
+
+            self.assertTrue(readiness["ready_to_broadcast"])
+            self.assertEqual(4, readiness["ready"])
+            self.assertEqual(4, readiness["target"])
+
     def test_autonomous_tick_refills_prebuffer_even_when_playback_queue_is_not_empty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -615,7 +671,7 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
                     "select metadata_json from announcement_queue where status='ready' and program_id='night_lab' order by id"
                 ).fetchall()
             track_ids = [json.loads(row["metadata_json"])["track_id"] for row in ready]
-            self.assertEqual(2, len(track_ids))
+            self.assertEqual(3, len(track_ids))
             self.assertEqual(len(track_ids), len(set(track_ids)))
 
     def test_prebuffer_retires_existing_duplicate_track_bound_rows(self) -> None:
@@ -663,7 +719,7 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
                 ).fetchall()
             track_ids = [json.loads(row["metadata_json"])["track_id"] for row in ready]
             self.assertEqual(["ready", "stale"], [row["status"] for row in duplicates])
-            self.assertEqual(2, len(track_ids))
+            self.assertEqual(3, len(track_ids))
             self.assertEqual(len(track_ids), len(set(track_ids)))
 
     def test_queue_next_track_uses_ready_announcement_before_generating_live_speech(self) -> None:
