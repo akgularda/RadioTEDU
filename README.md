@@ -169,7 +169,7 @@ Search is throttled by `WEB_SEARCH_INTERVAL_MINUTES` and never blocks playback.
 
 ## Weather
 
-Weather context is optional and real-only. When enabled, RadioTEDU fetches current conditions from Open-Meteo and passes a short summary into the DJ decision prompt; if the provider is disabled, unconfigured, or unreachable, the status payload and dashboard show `No weather data.`.
+Weather context is optional and real-only. When enabled, RadioTEDU fetches current conditions from Open-Meteo, can queue a short weather note into the same prepared announcement buffer, and passes a short summary into the DJ decision prompt; if the provider is disabled, unconfigured, or unreachable, the status payload and dashboard show `No weather data.` and the agent skips weather announcements.
 
 Portable default:
 

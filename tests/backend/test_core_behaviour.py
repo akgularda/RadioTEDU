@@ -895,6 +895,61 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual("No weather data.", context.summary)
             self.assertIsNone(context.temperature_c)
 
+    def test_weather_prebuffer_uses_real_available_weather_without_inventing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.weather_enabled = True
+            settings.min_ready_announcements = 1
+            settings.max_ready_announcements = 1
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            from backend.radio_agent import RadioAgent
+            from backend.weather.open_meteo import WeatherContext
+
+            class FixedWeatherProvider:
+                def current_context(self):
+                    return WeatherContext(True, "Ankara", "Ankara: 18 C, Overcast, wind 8 km/h.", temperature_c=18, wind_kmh=8, condition="Overcast")
+
+            agent = RadioAgent(settings)
+            agent.weather_provider = FixedWeatherProvider()
+            readiness = agent.ensure_announcement_prebuffer("night_lab")
+
+            self.assertTrue(readiness["ready_to_broadcast"])
+            with connect(settings) as conn:
+                row = conn.execute("select text, metadata_json from announcement_queue where status='ready'").fetchone()
+            metadata = json.loads(row["metadata_json"])
+            self.assertEqual("weather", metadata["kind"])
+            self.assertIn("Ankara: 18 C, Overcast", row["text"])
+            self.assertIn("open-meteo", metadata["source"])
+
+    def test_weather_prebuffer_skips_unavailable_weather(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.weather_enabled = True
+            settings.min_ready_announcements = 1
+            settings.max_ready_announcements = 1
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            from backend.radio_agent import RadioAgent
+            from backend.weather.open_meteo import WeatherContext
+
+            class MissingWeatherProvider:
+                def current_context(self):
+                    return WeatherContext(False, "Ankara", "No weather data.", source="unconfigured")
+
+            agent = RadioAgent(settings)
+            agent.weather_provider = MissingWeatherProvider()
+            readiness = agent.ensure_announcement_prebuffer("night_lab")
+
+            self.assertTrue(readiness["ready_to_broadcast"])
+            with connect(settings) as conn:
+                row = conn.execute("select text, metadata_json from announcement_queue where status='ready'").fetchone()
+            metadata = json.loads(row["metadata_json"])
+            self.assertNotEqual("weather", metadata.get("kind"))
+            self.assertNotIn("No weather data", row["text"])
+
     def test_llm_prompt_includes_weather_context_for_announcements(self) -> None:
         prompt = build_user_prompt(
             program={"name": "TEDU Dawn", "description": "Bright", "vibe": "fresh", "host_name": "Ece", "host_gender": "female", "personality": "warm"},

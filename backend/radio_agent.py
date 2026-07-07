@@ -30,6 +30,7 @@ class RadioAgent:
         self.last_news_checked_at: datetime | None = None
         self.last_news_source_at: datetime | None = None
         self.last_news_source_title: str | None = None
+        self.last_weather_announcement_at: datetime | None = None
 
     def start(self) -> dict:
         with connect(self.settings) as conn:
@@ -318,6 +319,9 @@ class RadioAgent:
         news = self._news_announcement(program)
         if news:
             return news
+        weather = self._weather_announcement(program)
+        if weather:
+            return weather
         candidates = self._candidates(program, exclude_track_ids=planned_track_ids)
         if not candidates:
             if self._has_tracks():
@@ -350,6 +354,34 @@ class RadioAgent:
                 "track_genre": selected.get("genre"),
                 "decision_reason": choice.reason,
                 "used_fallback": choice.used_fallback,
+            },
+        }
+
+    def _weather_announcement(self, program: dict) -> dict | None:
+        if not self.settings.weather_enabled:
+            return None
+        now = datetime.now(timezone.utc)
+        if (
+            self.last_weather_announcement_at
+            and now - self.last_weather_announcement_at < timedelta(minutes=self.settings.weather_interval_minutes)
+        ):
+            return None
+        context = self._weather_context()
+        if not context.get("available"):
+            return None
+        summary = " ".join(str(context.get("summary") or "").split())
+        if not summary or summary == "No weather data.":
+            return None
+        self.last_weather_announcement_at = now
+        line = f"RadioTEDU weather note: {summary}"
+        return {
+            "text": " ".join(line.split()[:28]),
+            "metadata": {
+                "program": program.get("name"),
+                "prebuffer": True,
+                "kind": "weather",
+                "location": context.get("location"),
+                "source": context.get("source") or self.settings.weather_provider,
             },
         }
 

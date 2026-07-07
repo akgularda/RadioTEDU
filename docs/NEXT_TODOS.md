@@ -245,7 +245,7 @@ Acceptance:
 - [x] Add feed freshness checks.
 - [x] Add per-feed allowlist in config.
 - [x] Add “do not read if stale” behavior.
-- [ ] Add weather announcement templates.
+- [x] Add weather announcement templates.
 - [ ] Add song context announcements only when sourced context exists.
 - [x] Add admin visibility into last fetched source time.
 
