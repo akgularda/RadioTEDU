@@ -167,6 +167,13 @@ const emptyStatus: StatusResponse = {
       artist: null,
       started_at: null,
     },
+    news: {
+      enabled: true,
+      last_checked_at: '2026-07-06T00:00:00+00:00',
+      last_source_at: '2026-07-06T00:00:00+00:00',
+      last_source_title: 'Campus observatory opens tonight',
+      max_age_hours: 24,
+    },
   },
   orchestrator: {
     running: false,
@@ -305,6 +312,8 @@ describe('Dashboard', () => {
     expect(screen.getByText('0/5')).toBeInTheDocument();
     expect(screen.getByText('0 / 8')).toBeInTheDocument();
     expect(screen.getByText('minimum 5')).toBeInTheDocument();
+    expect(screen.getByText('News Source')).toBeInTheDocument();
+    expect(screen.getByText('Campus observatory opens tonight')).toBeInTheDocument();
     expect(screen.getByText('Next Announcement')).toBeInTheDocument();
     expect(screen.getByText('Edit')).toBeInTheDocument();
     expect(screen.queryByText(/support|balance|money|donation|payment|revenue|profit/i)).toBeNull();

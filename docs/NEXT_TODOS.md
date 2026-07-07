@@ -241,13 +241,13 @@ Acceptance:
 
 ## P2 - Better News/Weather/Context Segments
 
-- [ ] Keep RSS/news source-only.
-- [ ] Add feed freshness checks.
-- [ ] Add per-feed allowlist in config.
-- [ ] Add “do not read if stale” behavior.
+- [x] Keep RSS/news source-only.
+- [x] Add feed freshness checks.
+- [x] Add per-feed allowlist in config.
+- [x] Add “do not read if stale” behavior.
 - [ ] Add weather announcement templates.
 - [ ] Add song context announcements only when sourced context exists.
-- [ ] Add admin visibility into last fetched source time.
+- [x] Add admin visibility into last fetched source time.
 
 Acceptance:
 - The AI host can mention news/weather/song context without inventing facts.

@@ -27,6 +27,9 @@ class RadioAgent:
         self.last_llm_runtime_at: datetime | None = None
         self.last_llm_runtime_status: dict | None = None
         self.last_news_at: datetime | None = None
+        self.last_news_checked_at: datetime | None = None
+        self.last_news_source_at: datetime | None = None
+        self.last_news_source_title: str | None = None
 
     def start(self) -> dict:
         with connect(self.settings) as conn:
@@ -356,6 +359,7 @@ class RadioAgent:
         now = datetime.now(timezone.utc)
         if self.last_news_at and now - self.last_news_at < timedelta(minutes=self.settings.news_interval_minutes):
             return None
+        self.last_news_checked_at = now
         provider = RSSSearchProvider(self.settings.rss_feeds_path)
         try:
             item = next(iter(provider.search("", limit=1)), None)
@@ -363,8 +367,13 @@ class RadioAgent:
             return None
         if item is None or not item.title.strip():
             return None
+        published_at = self._fresh_news_timestamp(getattr(item, "published_at", None), now)
+        if not published_at:
+            return None
         self.last_news_at = now
         title = " ".join(item.title.split())
+        self.last_news_source_at = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        self.last_news_source_title = title[:180]
         snippet = " ".join(item.snippet.split())
         context = snippet[:90] if snippet else title
         line = f"RadioTEDU news note: {title}. {context}"
@@ -377,8 +386,23 @@ class RadioAgent:
                 "news_title": title[:180],
                 "news_url": item.url,
                 "source": item.source,
+                "published_at": published_at,
             },
         }
+
+    def _fresh_news_timestamp(self, published_at: str | None, now: datetime) -> str | None:
+        if not published_at:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        max_age = timedelta(hours=max(1, int(self.settings.news_max_age_hours)))
+        if now - parsed.astimezone(timezone.utc) > max_age:
+            return None
+        return parsed.astimezone(timezone.utc).isoformat()
 
     def _candidates(self, program: dict, exclude_track_ids: set[int] | None = None) -> list[dict]:
         cutoff_song = (datetime.now(timezone.utc) - timedelta(hours=self.settings.song_repeat_hours)).isoformat()

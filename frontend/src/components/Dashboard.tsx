@@ -856,6 +856,11 @@ function RuntimeWatch({ observability }: { observability: StatusResponse['observ
           <strong>{prebuffer.failed}</strong>
         </div>
         <div>
+          <span>News Source</span>
+          <strong>{observability.news.enabled ? observability.news.last_source_title || 'Awaiting fresh RSS' : 'Disabled'}</strong>
+          <small>{observability.news.last_source_at ? `fresh ${new Date(observability.news.last_source_at).toLocaleString()}` : `${observability.news.max_age_hours}h freshness`}</small>
+        </div>
+        <div>
           <span>Uptime</span>
           <strong>{formatDuration(observability.uptime_seconds)}</strong>
         </div>

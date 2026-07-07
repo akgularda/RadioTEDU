@@ -4,6 +4,8 @@ import json
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from .base import SearchResult
@@ -40,7 +42,8 @@ class RSSSearchProvider:
                 title = item.findtext("title") or "Untitled"
                 link = item.findtext("link") or url
                 summary = item.findtext("description") or ""
-                items.append(SearchResult(title=title, url=link, snippet=summary[:280], source="rss"))
+                published_at = _published_at(item)
+                items.append(SearchResult(title=title, url=link, snippet=summary[:280], source="rss", published_at=published_at))
         self._cache = items
         self._cached_at = time.time()
         return items
@@ -57,3 +60,16 @@ class RSSSearchProvider:
         if isinstance(payload, dict):
             return [str(item) for item in payload.get("feeds", [])]
         return []
+
+
+def _published_at(item: ET.Element) -> str | None:
+    raw = item.findtext("pubDate") or item.findtext("{http://purl.org/dc/elements/1.1/}date")
+    if not raw:
+        return None
+    try:
+        parsed = parsedate_to_datetime(raw.strip())
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()

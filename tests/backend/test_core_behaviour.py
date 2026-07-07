@@ -3,6 +3,8 @@ import os
 import tempfile
 import unittest
 import wave
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -260,9 +262,10 @@ class RadioTEDUCoreTests(unittest.TestCase):
             settings.rss_feeds_path = str(root / "rss_feeds.json")
             feed = root / "feed.xml"
             feed.write_text(
-                """
+                f"""
                 <rss><channel><item><title>Campus observatory opens tonight</title>
                 <link>https://news.example/observatory</link>
+                <pubDate>{format_datetime(datetime.now(timezone.utc))}</pubDate>
                 <description>Students will host a public skywatch after sunset.</description></item></channel></rss>
                 """,
                 encoding="utf-8",
@@ -281,6 +284,48 @@ class RadioTEDUCoreTests(unittest.TestCase):
             metadata = json.loads(row["metadata_json"])
             self.assertEqual("news", metadata["kind"])
             self.assertEqual("https://news.example/observatory", metadata["news_url"])
+            self.assertIn("published_at", metadata)
+            from backend.app import observability
+
+            news_status = observability(settings, agent)["news"]
+            self.assertTrue(news_status["enabled"])
+            self.assertIsNotNone(news_status["last_checked_at"])
+            self.assertIsNotNone(news_status["last_source_at"])
+            self.assertEqual("Campus observatory opens tonight", news_status["last_source_title"])
+
+    def test_news_prebuffer_skips_stale_rss_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.news_enabled = True
+            settings.min_ready_announcements = 1
+            settings.max_ready_announcements = 1
+            settings.rss_feeds_path = str(root / "rss_feeds.json")
+            stale_date = format_datetime(datetime.now(timezone.utc) - timedelta(days=3))
+            feed = root / "feed.xml"
+            feed.write_text(
+                f"""
+                <rss><channel><item><title>Old campus notice</title>
+                <link>https://news.example/old</link>
+                <pubDate>{stale_date}</pubDate>
+                <description>This should not be read on air.</description></item></channel></rss>
+                """,
+                encoding="utf-8",
+            )
+            (root / "rss_feeds.json").write_text(json.dumps({"feeds": [feed.as_uri()]}), encoding="utf-8")
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            from backend.radio_agent import RadioAgent
+
+            agent = RadioAgent(settings)
+            readiness = agent.ensure_announcement_prebuffer("night_lab")
+
+            self.assertTrue(readiness["ready_to_broadcast"])
+            with connect(settings) as conn:
+                row = conn.execute("select text, metadata_json from announcement_queue where status='ready'").fetchone()
+            metadata = json.loads(row["metadata_json"])
+            self.assertNotEqual("news", metadata.get("kind"))
+            self.assertNotIn("Old campus notice", row["text"])
 
     def test_scanner_indexes_real_audio_without_fake_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -666,6 +666,13 @@ def observability(settings: Settings, agent: RadioAgent) -> dict:
         "recent_errors": errors,
         "supervisor_restarts": int(restarts["value"]) if restarts else 0,
         "playback_now": agent.playback.state(),
+        "news": {
+            "enabled": bool(settings.news_enabled),
+            "last_checked_at": agent.last_news_checked_at.isoformat() if agent.last_news_checked_at else None,
+            "last_source_at": agent.last_news_source_at.isoformat() if agent.last_news_source_at else None,
+            "last_source_title": agent.last_news_source_title,
+            "max_age_hours": int(settings.news_max_age_hours),
+        },
     }
 
 

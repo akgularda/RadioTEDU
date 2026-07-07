@@ -79,6 +79,7 @@ class Settings:
     snapshot_ttl_seconds: int = 30
     news_enabled: bool = False
     news_interval_minutes: int = 60
+    news_max_age_hours: int = 24
 
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> "Settings":
@@ -136,6 +137,7 @@ class Settings:
             "snapshot_ttl_seconds": "SNAPSHOT_TTL_SECONDS",
             "news_enabled": "NEWS_ENABLED",
             "news_interval_minutes": "NEWS_INTERVAL_MINUTES",
+            "news_max_age_hours": "NEWS_MAX_AGE_HOURS",
         }
         for field in fields(cls):
             env_name = key_map[field.name]

@@ -165,6 +165,13 @@ export interface RuntimeObservability {
   recent_errors: Array<{ message: string; created_at: string }>;
   supervisor_restarts: number;
   playback_now: PlaybackItem;
+  news: {
+    enabled: boolean;
+    last_checked_at: string | null;
+    last_source_at: string | null;
+    last_source_title: string | null;
+    max_age_hours: number;
+  };
 }
 
 export interface LiquidsoapState {

@@ -10,6 +10,7 @@ class SearchResult:
     url: str
     snippet: str
     source: str
+    published_at: str | None = None
 
 
 class SearchProvider(Protocol):

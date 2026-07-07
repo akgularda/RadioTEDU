@@ -242,10 +242,11 @@ RadioTEDU can read short news notes from configured RSS feeds:
 ```env
 NEWS_ENABLED=true
 NEWS_INTERVAL_MINUTES=60
+NEWS_MAX_AGE_HOURS=24
 RSS_FEEDS_PATH=data/rss_feeds.json
 ```
 
-News is retrieval-first. The agent uses titles/snippets from configured RSS feeds, queues a short announcement in the same prebuffer as DJ/song/weather/listener lines, and skips news if the feed is empty or unreachable. The model must not invent headlines.
+News is retrieval-first. The agent uses titles/snippets from configured RSS feeds, requires a fresh RSS `pubDate`/Dublin Core date, queues a short announcement in the same prebuffer as DJ/song/weather/listener lines, and skips news if the feed is empty, unreachable, undated, or older than `NEWS_MAX_AGE_HOURS`. The model must not invent headlines.
 
 ## Playback
 
