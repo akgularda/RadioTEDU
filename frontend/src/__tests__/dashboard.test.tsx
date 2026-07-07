@@ -448,6 +448,7 @@ describe('Dashboard', () => {
 
   it('supports keyboard-safe Run, Stop, and Skip controls', async () => {
     const user = userEvent.setup();
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ started: true }),
@@ -459,6 +460,23 @@ describe('Dashboard', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/air/start', expect.anything());
     expect(fetchMock).toHaveBeenCalledWith('/api/air/stop', expect.anything());
     expect(fetchMock).toHaveBeenCalledWith('/api/control/skip', expect.anything());
+    fetchMock.mockRestore();
+    confirmMock.mockRestore();
+  });
+
+  it('requires confirmation for disruptive air controls', async () => {
+    const user = userEvent.setup();
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true } as Response);
+
+    render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
+    await user.click(screen.getByRole('button', { name: 'Stop Air' }));
+    await user.click(screen.getByRole('button', { name: 'Skip Track' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan Music' }));
+
+    expect(confirmMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).not.toHaveBeenCalled();
+    confirmMock.mockRestore();
     fetchMock.mockRestore();
   });
 

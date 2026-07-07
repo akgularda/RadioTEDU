@@ -65,7 +65,24 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
   }
 
   async function stopAir() {
+    if (!window.confirm('Stop RadioTEDU air output?')) {
+      return;
+    }
     await control('/api/air/stop');
+  }
+
+  async function skipTrack() {
+    if (!window.confirm('Skip the current RadioTEDU track?')) {
+      return;
+    }
+    await control('/api/control/skip');
+  }
+
+  async function rescanMusic() {
+    if (!window.confirm('Rescan the local RadioTEDU music library now?')) {
+      return;
+    }
+    await control('/api/music/rescan');
   }
 
   useEffect(() => {
@@ -84,7 +101,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         void stopAir();
       } else if (key === 'k') {
         event.preventDefault();
-        void control('/api/control/skip');
+        void skipTrack();
       }
     }
     window.addEventListener('keydown', onKeyDown);
@@ -244,11 +261,11 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
             <Square size={15} />
             Stop Air
           </button>
-          <button type="button" onClick={() => control('/api/control/skip')}>
+          <button type="button" onClick={skipTrack}>
             <SkipForward size={15} />
             Skip Track
           </button>
-          <button type="button" onClick={() => control('/api/music/rescan')}>
+          <button type="button" onClick={rescanMusic}>
             <RefreshCw size={15} />
             Rescan Music
           </button>

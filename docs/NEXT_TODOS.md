@@ -221,7 +221,7 @@ Acceptance:
   - Website sync
 - [x] Add an explicit “local only” label for admin-only data.
 - [x] Add keyboard-safe controls for Run/Stop/Skip.
-- [ ] Add confirmation for destructive or disruptive actions.
+- [x] Add confirmation for destructive or disruptive actions.
 
 Acceptance:
 - Operator can understand whether the station is actually ready in under 10 seconds.
