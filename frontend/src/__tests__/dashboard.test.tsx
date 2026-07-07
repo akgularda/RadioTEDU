@@ -218,6 +218,16 @@ const emptyStatus: StatusResponse = {
       blocking_failures: ['music_library'],
     },
   },
+  maintenance: {
+    generated_clip_count: 0,
+    agent_log_count: 0,
+    last_maintenance: null,
+  },
+  watchdog: {
+    stale_prebuffer: 0,
+    ready_prebuffer: 0,
+    error_log_count: 0,
+  },
   configuration: {
     MUSIC_DIR: 'data/music',
     OLLAMA_MODEL: 'qwen3.5:4b',
@@ -266,6 +276,8 @@ describe('Dashboard', () => {
     expect(screen.getByText('0 playable tracks indexed.')).toBeInTheDocument();
     expect(screen.getByText('TTS')).toBeInTheDocument();
     expect(screen.getByText('fallback / dummy')).toBeInTheDocument();
+    expect(screen.getByText('Maintenance')).toBeInTheDocument();
+    expect(screen.getByText('Watchdog')).toBeInTheDocument();
     expect(screen.getByText('Selin / female')).toBeInTheDocument();
     expect(screen.getByText('tr_female_cool')).toBeInTheDocument();
     expect(screen.getAllByText('/ai').length).toBeGreaterThanOrEqual(1);
@@ -361,6 +373,7 @@ describe('Dashboard', () => {
     await user.click(screen.getByRole('button', { name: 'Send announcement' }));
     await user.click(screen.getByRole('button', { name: 'Generate Covers' }));
     await user.click(screen.getByRole('button', { name: 'Test TTS' }));
+    await user.click(screen.getByRole('button', { name: 'Run Maintenance' }));
 
     expect(fetchMock).toHaveBeenCalledWith('/api/control/say', {
       method: 'POST',
@@ -376,6 +389,11 @@ describe('Dashboard', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ program_id: 'night_lab' }),
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/maintenance/run', {
+      method: 'POST',
+      headers: undefined,
+      body: undefined,
     });
     fetchMock.mockRestore();
   });

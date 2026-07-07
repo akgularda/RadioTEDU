@@ -14,6 +14,7 @@ from .config import Settings, ensure_runtime_dirs
 from .database import connect, init_db, log_event, now_iso, rows_to_dicts
 from .liquidsoap import liquidsoap_status, render_liquidsoap_config, start_liquidsoap, stop_liquidsoap
 from .llm import ollama_runtime_status
+from .maintenance import maintenance_summary, run_maintenance, watchdog_summary
 from .models import ListenerFeedbackRequest, ProgramUpdateRequest, PublicSessionRequest, SayRequest, SearchRequest
 from .music_library import scan_music
 from .ollama_setup import check_ollama_setup
@@ -219,6 +220,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         result = scan_music(settings)
         return result.__dict__
 
+    @app.post("/api/maintenance/run")
+    def maintenance_run(payload: dict = Body(default_factory=dict)) -> dict:
+        return run_maintenance(
+            settings,
+            clip_retention_days=int(payload.get("clip_retention_days", 7)),
+            max_agent_logs=int(payload.get("max_agent_logs", 500)),
+        )
+
     @app.post("/api/art/generate-program-covers")
     def covers() -> dict:
         paths = generate_covers(settings)
@@ -308,6 +317,8 @@ def build_status(
         "liquidsoap": liquidsoap,
         "music_library": music_library_status(settings),
         "air_readiness": air_start_readiness(settings, agent, prepare_prebuffer=False),
+        "maintenance": maintenance_summary(settings),
+        "watchdog": watchdog_summary(settings),
         "configuration": operator_configuration(settings),
         "website_sync": website_sync_health(settings, public_snapshot_pusher),
         "setup": {

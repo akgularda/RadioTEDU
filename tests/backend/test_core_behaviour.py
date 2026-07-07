@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.database import connect, init_db
+from backend.database import connect, init_db, now_iso
 from backend.liquidsoap import render_liquidsoap_config
 from backend.llm import build_user_prompt, choose_track_with_llm, ollama_runtime_status
 from backend.music_library import iter_audio_files, scan_music
@@ -671,6 +671,57 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual("dummy", payload["provider"])
             self.assertTrue(Path(payload["file_path"]).exists())
             self.assertIn("Selin", Path(payload["file_path"]).with_suffix(".txt").read_text(encoding="utf-8"))
+
+    def test_maintenance_cleanup_removes_old_generated_clips_and_bounds_logs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            init_db(settings)
+            old_clip = root / "static" / "generated" / "tts" / "old.wav"
+            new_clip = root / "static" / "generated" / "tts" / "new.wav"
+            make_wav(old_clip)
+            old_clip.with_suffix(".txt").write_text("old", encoding="utf-8")
+            make_wav(new_clip)
+            with connect(settings) as conn:
+                conn.execute(
+                    "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
+                    ("prebuffer_announcement", "old", str(old_clip), "dummy", "night_lab", "2026-01-01T00:00:00+00:00"),
+                )
+                conn.execute(
+                    "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
+                    ("prebuffer_announcement", "new", str(new_clip), "dummy", "night_lab", now_iso()),
+                )
+                for index in range(15):
+                    conn.execute(
+                        "insert into agent_logs (level, message, metadata_json, created_at) values (?, ?, '{}', ?)",
+                        ("info", f"log {index}", f"2026-01-01T00:00:{index:02d}+00:00"),
+                    )
+                conn.commit()
+
+            from backend.maintenance import run_maintenance
+
+            result = run_maintenance(settings, clip_retention_days=1, max_agent_logs=5)
+
+            self.assertEqual(1, result["clips_deleted"])
+            self.assertFalse(old_clip.exists())
+            self.assertFalse(old_clip.with_suffix(".txt").exists())
+            self.assertTrue(new_clip.exists())
+            self.assertEqual(10, result["logs_deleted"])
+            with connect(settings) as conn:
+                self.assertEqual(1, conn.execute("select count(*) from generated_clips").fetchone()[0])
+                self.assertEqual(5, conn.execute("select count(*) from agent_logs").fetchone()[0])
+
+    def test_status_exposes_watchdog_and_maintenance_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            app = create_app(settings)
+
+            payload = TestClient(app).get("/api/status").json()
+
+            self.assertIn("maintenance", payload)
+            self.assertIn("watchdog", payload)
+            self.assertIn("generated_clip_count", payload["maintenance"])
+            self.assertIn("stale_prebuffer", payload["watchdog"])
 
     def test_weather_context_uses_real_payload_and_is_exposed_in_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

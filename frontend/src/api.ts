@@ -205,6 +205,18 @@ export interface AirReadiness {
   };
 }
 
+export interface MaintenanceState {
+  generated_clip_count: number;
+  agent_log_count: number;
+  last_maintenance: { value: string; updated_at: string } | null;
+}
+
+export interface WatchdogState {
+  stale_prebuffer: number;
+  ready_prebuffer: number;
+  error_log_count: number;
+}
+
 export interface OperatorConfiguration {
   MUSIC_DIR: string;
   OLLAMA_MODEL: string;
@@ -269,6 +281,8 @@ export interface StatusResponse {
   liquidsoap: LiquidsoapState;
   music_library: MusicLibraryStats;
   air_readiness: AirReadiness;
+  maintenance: MaintenanceState;
+  watchdog: WatchdogState;
   configuration: OperatorConfiguration;
   website_sync: WebsiteSyncHealth;
   setup: SetupState;

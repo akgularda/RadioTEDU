@@ -237,6 +237,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         <AirReadinessPanel readiness={status.air_readiness} />
         <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
         <TtsPanel health={status.health.tts_runtime} currentProgramId={currentProgram?.id || null} onCommand={control} />
+        <MaintenancePanel maintenance={status.maintenance} watchdog={status.watchdog} onCommand={control} />
         <MusicLibraryPanel library={status.music_library} />
         <ConfigurationPanel configuration={status.configuration} />
         <WebsiteSyncPanel sync={status.website_sync} />
@@ -533,6 +534,49 @@ function TtsPanel({
         <button type="button" onClick={() => onCommand('/api/tts/test', { program_id: currentProgramId })}>
           <Play size={15} />
           Test TTS
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function MaintenancePanel({
+  maintenance,
+  watchdog,
+  onCommand,
+}: {
+  maintenance: StatusResponse['maintenance'];
+  watchdog: StatusResponse['watchdog'];
+  onCommand: (path: string, body?: unknown) => Promise<unknown>;
+}) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Maintenance</span>
+        <span>Watchdog</span>
+      </div>
+      <div className="health-grid">
+        <div>
+          <span>Generated Clips</span>
+          <strong>{maintenance.generated_clip_count}</strong>
+        </div>
+        <div>
+          <span>Agent Logs</span>
+          <strong>{maintenance.agent_log_count}</strong>
+        </div>
+        <div>
+          <span>Stale Prebuffer</span>
+          <strong>{watchdog.stale_prebuffer}</strong>
+        </div>
+        <div>
+          <span>Recent Errors</span>
+          <strong>{watchdog.error_log_count}</strong>
+        </div>
+      </div>
+      <div className="strategy-actions">
+        <button type="button" onClick={() => onCommand('/api/maintenance/run')}>
+          <RefreshCw size={15} />
+          Run Maintenance
         </button>
       </div>
     </section>

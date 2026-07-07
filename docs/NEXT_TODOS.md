@@ -102,7 +102,7 @@ Acceptance:
 - [x] Show TTS provider health in admin panel.
 - [x] Show last TTS error locally only.
 - [x] Add a one-click local TTS test from the admin app.
-- [ ] Add cleanup policy for generated clips.
+- [x] Add cleanup policy for generated clips.
 
 Acceptance:
 - Each program can use its own voice/personality.
@@ -227,11 +227,11 @@ Acceptance:
 ## P2 - Long-Run Reliability
 
 - [ ] Add a watchdog for stuck playback.
-- [ ] Add a watchdog for stale announcement buffer.
+- [x] Add a watchdog for stale announcement buffer.
 - [ ] Add a watchdog for Liquidsoap process exit.
 - [ ] Add a watchdog for Icecast mount going down.
-- [ ] Add bounded log retention.
-- [ ] Add generated clip retention cleanup.
+- [x] Add bounded log retention.
+- [x] Add generated clip retention cleanup.
 - [ ] Add database vacuum/maintenance task.
 
 Acceptance:
