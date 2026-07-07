@@ -463,6 +463,40 @@ const publicStatus: PublicStatusResponse = {
   top_songs: [{ id: 1, title: 'Blue Room', artist: 'Alice', plays: 3 }],
   top_genres: [{ genre: 'Jazz', plays: 3 }],
   stream: { url: 'https://radiotedu.com/live.mp3', status: 'configured' },
+  current_minutes_left: 42,
+  next_program: {
+    id: 'morning_signal',
+    name: 'TEDU Dawn',
+    description: 'A gentle campus morning handoff.',
+    vibe: 'morning jazz',
+    host_name: 'Ece',
+    host_gender: 'female',
+    voice: 'tr_female_warm',
+    personality: 'warm, precise',
+    start_time: '06:00',
+    end_time: '10:00',
+    days_of_week: 'mon,tue,wed,thu,fri',
+    cover_path: '/static/generated/covers/morning_signal.png',
+    active: 1,
+  },
+  content_breakdown: [
+    { label: 'Music', percent: 84 },
+    { label: 'Talking', percent: 16 },
+  ],
+  activity: [
+    {
+      kind: 'listener',
+      actor: 'Listener',
+      content: 'more mellow piano after midnight',
+      created_at: '2026-07-06T00:02:00+00:00',
+    },
+    {
+      kind: 'broadcast',
+      actor: 'RadioTEDU',
+      content: 'Queued Blue Room by Alice.',
+      created_at: '2026-07-06T00:03:00+00:00',
+    },
+  ],
   metrics: {
     current_listeners: 0,
     popularity: null,
@@ -480,10 +514,29 @@ describe('PublicDashboard', () => {
     expect(screen.getByText('Waiting for the broadcast computer to sync.')).toBeInTheDocument();
     expect(screen.getByText('Waiting for RadioTEDU broadcast.')).toBeInTheDocument();
     expect(screen.getByText('Current Listeners')).toBeInTheDocument();
+    expect(screen.getByText('Broadcast Status')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Stream Link' })).toBeInTheDocument();
     expect(screen.getByText('Blue Room')).toBeInTheDocument();
+    expect(screen.getByText('42m left')).toBeInTheDocument();
+    expect(screen.getByText(/Up next at 06:00: TEDU Dawn/)).toBeInTheDocument();
     expect(screen.getByText(/Jazz 100%/)).toBeInTheDocument();
+    expect(screen.getByText('Content Breakdown')).toBeInTheDocument();
+    expect(screen.getByText(/Music 84%/)).toBeInTheDocument();
+    expect(screen.getByText('RadioTEDU Activity')).toBeInTheDocument();
+    expect(screen.getByText('more mellow piano after midnight')).toBeInTheDocument();
+    expect(screen.getByText('Queued Blue Room by Alice.')).toBeInTheDocument();
     expect(screen.queryByText(/Start|Stop|Skip|Rescan|Long-Horizon Strategy|Autonomy Ops|No logs yet/i)).toBeNull();
     expect(screen.queryByText(/support|balance|money|donation|payment|revenue|profit/i)).toBeNull();
     expect(screen.queryByText(/OpenAIR|Grok and Roll|Backlink Broadcast|Thinking Frequencies/i)).toBeNull();
+  });
+
+  it('acknowledges copying the stream link when Clipboard API is unavailable', async () => {
+    const user = userEvent.setup();
+
+    render(<PublicDashboard status={publicStatus} />);
+
+    await user.click(screen.getByRole('button', { name: 'Copy Stream Link' }));
+
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 });

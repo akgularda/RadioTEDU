@@ -14,6 +14,7 @@ from backend.liquidsoap import render_liquidsoap_config
 from backend.llm import build_user_prompt, choose_track_with_llm, ollama_runtime_status
 from backend.music_library import iter_audio_files, scan_music
 from backend.playback import QueueItem
+from backend.public_dashboard import public_snapshot_from_state
 from backend.tts.dummy_tts import DummyTTSProvider
 from backend.weather.open_meteo import OpenMeteoWeatherProvider
 
@@ -96,6 +97,15 @@ class RadioTEDUCoreTests(unittest.TestCase):
                     "started_at": "2026-07-06T00:00:00+00:00",
                 },
                 "stream": {"url": "https://radiotedu.com/live.mp3"},
+                "content_breakdown": [
+                    {"label": "Music", "percent": 84},
+                    {"label": "Talking", "percent": 16},
+                    {"label": "Money", "percent": 100},
+                ],
+                "activity": [
+                    {"kind": "listener", "actor": "@student", "content": "more piano please", "created_at": "2026-07-06T00:10:00+00:00"},
+                    {"kind": "error", "actor": "ops", "content": "F:/Songs private payment token", "created_at": "2026-07-06T00:11:00+00:00"},
+                ],
                 "logs": [{"message": "private"}],
                 "incidents": [{"summary": "private"}],
             }
@@ -108,6 +118,9 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual("Blue Room", public["now_playing"]["title"])
             self.assertNotIn("file_path", public["now_playing"])
             self.assertIsNone(public["channel"]["cover_path"])
+            self.assertEqual([{"label": "Music", "percent": 84}, {"label": "Talking", "percent": 16}], public["content_breakdown"])
+            self.assertEqual("more piano please", public["activity"][0]["content"])
+            self.assertEqual(1, len(public["activity"]))
             self.assertNotIn("logs", public)
             self.assertNotIn("incidents", public)
             self.assertNotRegex(json.dumps(public).lower(), r"f:/songs|private|donation|payment|money|support")
@@ -128,6 +141,49 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual(1, active["metrics"]["current_listeners"])
             ended = client.post("/api/public/session/end", json={"session_id": "listener_123456"}).json()
             self.assertEqual(0, ended["metrics"]["current_listeners"])
+
+    def test_public_snapshot_from_state_includes_dossier_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.public_stream_url = "https://radiotedu.com/ai"
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+            app = create_app(settings)
+            with connect(settings) as conn:
+                track_id = conn.execute("select id from tracks where title='Blue Room'").fetchone()[0]
+                conn.execute(
+                    "insert into play_history (track_id, program_id, played_at, duration_seconds, source) values (?, ?, ?, ?, ?)",
+                    (track_id, "night_lab", "2026-07-06T00:00:00+00:00", 120, "track"),
+                )
+                conn.execute(
+                    "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
+                    ("dj", "Welcome to Jazz Lab.", str(root / "tts" / "dj.wav"), "tr_female_cool", "night_lab", "2026-07-06T00:01:00+00:00"),
+                )
+                conn.execute(
+                    "insert into autonomy_memory (kind, content, source, weight, created_at) values (?, ?, ?, ?, ?)",
+                    ("listener_feedback", "more mellow piano after midnight", "web", 1.0, "2026-07-06T00:02:00+00:00"),
+                )
+                conn.execute(
+                    "insert into agent_logs (level, message, metadata_json, created_at) values (?, ?, ?, ?)",
+                    ("info", "Queued Blue Room by Alice.", "{}", "2026-07-06T00:03:00+00:00"),
+                )
+                conn.execute(
+                    "insert into agent_logs (level, message, metadata_json, created_at) values (?, ?, ?, ?)",
+                    ("error", "F:/Songs private payment path leaked.", "{}", "2026-07-06T00:04:00+00:00"),
+                )
+                conn.commit()
+
+            payload = public_snapshot_from_state(settings, app.state.agent)
+            self.assertEqual("https://radiotedu.com/ai", payload["stream"]["url"])
+            self.assertIn("current_minutes_left", payload)
+            self.assertIn("next_program", payload)
+            self.assertIn({"label": "Music", "percent": 50}, payload["content_breakdown"])
+            self.assertIn({"label": "Talking", "percent": 50}, payload["content_breakdown"])
+            self.assertEqual("listener", payload["activity"][0]["kind"])
+            self.assertEqual("more mellow piano after midnight", payload["activity"][0]["content"])
+            self.assertTrue(any(item["kind"] == "broadcast" and "Queued Blue Room" in item["content"] for item in payload["activity"]))
+            self.assertNotRegex(json.dumps(payload).lower(), r"f:/songs|private|payment|file_path")
 
     def test_news_prebuffer_uses_curated_rss_without_inventing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

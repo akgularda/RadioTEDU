@@ -47,17 +47,47 @@ def public_snapshot_from_state(settings: Settings, agent) -> dict:
             limit 10
             """
         ).fetchall()
+        music_count = conn.execute("select count(*) from play_history").fetchone()[0]
+        talk_count = conn.execute("select count(*) from generated_clips").fetchone()[0]
+        listener_notes = rows_to_dicts(
+            conn.execute(
+                """
+                select content, source, created_at
+                from autonomy_memory
+                where kind='listener_feedback'
+                order by created_at desc, id desc
+                limit 4
+                """
+            ).fetchall()
+        )
+        broadcast_logs = rows_to_dicts(
+            conn.execute(
+                """
+                select message, created_at
+                from agent_logs
+                where level='info' and message like 'Queued %'
+                order by created_at desc, id desc
+                limit 4
+                """
+            ).fetchall()
+        )
     playback = agent.playback.state()
+    current = current_program(settings)
+    upcoming = next_programs(settings)
     snapshot = {
         "generated_at": now_iso(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=max(5, settings.snapshot_ttl_seconds))).isoformat(),
         "channel": _public_channel(channel),
         "now_playing": _public_playback(playback),
-        "current_program": _public_program(current_program(settings)),
-        "next_programs": [_public_program(program) for program in next_programs(settings)],
+        "current_program": _public_program(current),
+        "current_minutes_left": _minutes_left(current.get("end_time")),
+        "next_program": _public_program_or_none(upcoming[0]) if upcoming else None,
+        "next_programs": [_public_program(program) for program in upcoming],
         "programs": [_public_program(program) for program in programs],
         "top_songs": [dict(row) for row in top_songs_rows],
         "top_genres": [dict(row) for row in top_genres_rows],
+        "content_breakdown": _content_breakdown(music_count, talk_count),
+        "activity": _activity_from_state(listener_notes, broadcast_logs),
         "stream": {
             "url": settings.public_stream_url,
             "status": "configured" if settings.public_stream_url else "unconfigured",
@@ -78,12 +108,18 @@ def sanitize_public_snapshot(payload: dict) -> dict:
         "channel": _public_channel(_dict(payload.get("channel"))),
         "now_playing": _public_playback(_dict(payload.get("now_playing"))),
         "current_program": _public_program_or_none(payload.get("current_program")),
+        "current_minutes_left": _nullable_int(payload.get("current_minutes_left"), 0, 1440),
+        "next_program": _public_program_or_none(payload.get("next_program")),
         "next_programs": [_public_program(item) for item in _list(payload.get("next_programs"))[:4]],
         "programs": [_public_program(item) for item in _list(payload.get("programs"))[:8]],
         "top_songs": [_public_song(item) for item in _list(payload.get("top_songs"))[:10]],
         "top_genres": [_public_genre(item) for item in _list(payload.get("top_genres"))[:10]],
+        "content_breakdown": [_public_breakdown(item) for item in _list(payload.get("content_breakdown"))[:4]],
+        "activity": [_public_activity(item) for item in _list(payload.get("activity"))[:8]],
         "stream": _public_stream(_dict(payload.get("stream"))),
     }
+    safe["content_breakdown"] = [item for item in safe["content_breakdown"] if item]
+    safe["activity"] = [item for item in safe["activity"] if item]
     safe["metrics"] = {
         "current_listeners": None,
         "popularity": None,
@@ -264,10 +300,14 @@ def _offline_public_status(settings: Settings, metrics: dict) -> dict:
         },
         "now_playing": PUBLIC_EMPTY_NOW,
         "current_program": None,
+        "current_minutes_left": None,
+        "next_program": None,
         "next_programs": [],
         "programs": [],
         "top_songs": [],
         "top_genres": [],
+        "content_breakdown": [],
+        "activity": [],
         "stream": {"url": settings.public_stream_url, "status": "configured" if settings.public_stream_url else "unconfigured"},
         "metrics": metrics,
     }
@@ -329,6 +369,37 @@ def _public_genre(genre: dict) -> dict:
     return {"genre": _text(item.get("genre") or "unknown")[:80], "plays": max(0, int(item.get("plays") or 0))}
 
 
+def _public_breakdown(value: dict) -> dict | None:
+    item = _dict(value)
+    label = _text(item.get("label"))[:40]
+    if label not in {"Music", "Talking"}:
+        return None
+    try:
+        percent = int(item.get("percent") or 0)
+    except (TypeError, ValueError):
+        percent = 0
+    return {"label": label, "percent": max(0, min(100, percent))}
+
+
+def _public_activity(value: dict) -> dict | None:
+    item = _dict(value)
+    kind = _text(item.get("kind")).lower()[:24]
+    if kind not in {"listener", "host", "broadcast"}:
+        return None
+    content = _text(item.get("content"))[:220]
+    if not content or _has_private_terms(content):
+        return None
+    actor = _text(item.get("actor") or ("RadioTEDU" if kind != "listener" else "Listener"))[:80]
+    if _has_private_terms(actor):
+        actor = "RadioTEDU" if kind != "listener" else "Listener"
+    return {
+        "kind": kind,
+        "actor": actor,
+        "content": content,
+        "created_at": _nullable_text(item.get("created_at"), 80),
+    }
+
+
 def _public_stream(stream: dict) -> dict:
     url = _text(stream.get("url"))[:300]
     return {"url": url, "status": "configured" if url else "unconfigured"}
@@ -359,6 +430,70 @@ def _popularity(active: int, durations: list[int]) -> int | None:
         return None
     score = min(100, active * 10 + min(60, len(durations) * 4))
     return int(score)
+
+
+def _content_breakdown(music_count: int, talk_count: int) -> list[dict]:
+    total = max(0, int(music_count)) + max(0, int(talk_count))
+    if total <= 0:
+        return []
+    music_percent = round((max(0, int(music_count)) / total) * 100)
+    talking_percent = 100 - music_percent
+    return [
+        {"label": "Music", "percent": music_percent},
+        {"label": "Talking", "percent": talking_percent},
+    ]
+
+
+def _activity_from_state(listener_notes: list[dict], broadcast_logs: list[dict]) -> list[dict]:
+    activity: list[dict] = []
+    for note in listener_notes:
+        activity.append(
+            {
+                "kind": "listener",
+                "actor": "Listener",
+                "content": note.get("content"),
+                "created_at": note.get("created_at"),
+            }
+        )
+    for log in broadcast_logs:
+        activity.append(
+            {
+                "kind": "broadcast",
+                "actor": "RadioTEDU",
+                "content": log.get("message"),
+                "created_at": log.get("created_at"),
+            }
+        )
+    return activity[:8]
+
+
+def _minutes_left(end_time: Any) -> int | None:
+    text = _text(end_time)
+    try:
+        hour, minute = [int(part) for part in text.split(":", 1)]
+    except (TypeError, ValueError):
+        return None
+    now = datetime.now()
+    end = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if end <= now:
+        end += timedelta(days=1)
+    return max(0, int((end - now).total_seconds() // 60))
+
+
+def _nullable_int(value: Any, minimum: int, maximum: int) -> int | None:
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(minimum, min(maximum, number))
+
+
+def _has_private_terms(value: str) -> bool:
+    lowered = value.lower()
+    private_terms = ("\\", "f:/", "c:/", "file_path", "private", "donation", "payment", "money", "support", "token")
+    return any(term in lowered for term in private_terms)
 
 
 def _public_path(value: Any) -> str | None:

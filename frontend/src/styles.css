@@ -150,18 +150,23 @@ button {
 }
 
 .public-shell {
-  background: #f8f9fb;
+  background:
+    linear-gradient(180deg, rgba(20, 27, 40, 0.06), transparent 240px),
+    #f6f7f8;
   align-items: flex-start;
+  padding-top: 28px;
 }
 
 .public-card {
-  width: min(100%, 420px);
+  width: 100%;
+  border-color: #cfd5dc;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.1);
 }
 
 .public-page {
-  width: min(100%, 420px);
+  width: min(100%, 560px);
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .public-brand {
@@ -169,6 +174,7 @@ button {
   align-items: center;
   gap: 10px;
   color: #182132;
+  padding: 0 2px;
 }
 
 .radiotedu-mark,
@@ -200,13 +206,26 @@ button {
 }
 
 .public-brand strong {
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .public-brand span {
   margin-top: 2px;
-  color: #68758a;
+  color: #5f6d80;
   font-size: 12px;
+}
+
+.public-cover {
+  aspect-ratio: 16 / 8;
+}
+
+.public-station-header {
+  padding-top: 18px;
+}
+
+.public-card .station-title-block h1 {
+  font-size: 31px;
+  line-height: 1.05;
 }
 
 .station-cover {
@@ -268,6 +287,29 @@ button {
   border-color: #ffd3da;
   color: #d51f38;
   background: #fff7f8;
+}
+
+.public-now-playing {
+  align-items: center;
+}
+
+.public-stream-line {
+  margin: 0 16px 12px;
+  min-height: 34px;
+  padding: 8px 11px;
+  border: 1px solid #edf0f4;
+  border-radius: 6px;
+  color: #667386;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.public-stream-line strong {
+  color: #253246;
+  font-weight: 620;
 }
 
 .setup-banner {
@@ -451,11 +493,19 @@ button {
 
 .public-actions {
   padding: 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
   border-bottom: 1px solid #edf0f4;
 }
 
 .public-actions .outline-button {
   width: 100%;
+}
+
+.public-up-next {
+  padding-top: 8px;
+  border-top: 1px solid #edf0f4;
 }
 
 .control-strip button {
@@ -615,6 +665,67 @@ button {
   width: 8px;
   height: 8px;
   border-radius: 999px;
+}
+
+.content-breakdown-list {
+  display: grid;
+  gap: 10px;
+}
+
+.content-breakdown-row {
+  display: grid;
+  gap: 6px;
+  color: #243146;
+  font-size: 13px;
+}
+
+.content-breakdown-track {
+  height: 7px;
+  border-radius: 999px;
+  background: #eef1f5;
+  overflow: hidden;
+}
+
+.content-breakdown-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #253246, #3aa6a6);
+}
+
+.public-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.public-activity-list li {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.public-activity-list li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.public-activity-list small {
+  color: #6b7788;
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.public-activity-list span {
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .program-list {
@@ -866,6 +977,21 @@ button {
   .section-block {
     padding-left: 12px;
     padding-right: 12px;
+  }
+
+  .public-card .station-title-block h1 {
+    font-size: 27px;
+  }
+
+  .public-actions {
+    grid-template-columns: 1fr;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .public-stream-line {
+    margin-left: 12px;
+    margin-right: 12px;
   }
 
   .metric-cell {

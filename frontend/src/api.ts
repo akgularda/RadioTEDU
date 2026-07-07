@@ -250,6 +250,18 @@ export interface PublicMetrics {
   average_session: string | null;
 }
 
+export interface PublicContentBreakdown {
+  label: string;
+  percent: number;
+}
+
+export interface PublicActivityItem {
+  kind: 'listener' | 'host' | 'broadcast' | string;
+  actor: string;
+  content: string;
+  created_at: string | null;
+}
+
 export interface PublicStatusResponse {
   online: boolean;
   received_at: string | null;
@@ -259,10 +271,14 @@ export interface PublicStatusResponse {
   channel: Channel;
   now_playing: PlaybackItem;
   current_program: Program | null;
+  current_minutes_left: number | null;
+  next_program: Program | null;
   next_programs: Program[];
   programs: Program[];
   top_songs: TopSong[];
   top_genres: TopGenre[];
+  content_breakdown: PublicContentBreakdown[];
+  activity: PublicActivityItem[];
   stream: PublicStream;
   metrics: PublicMetrics;
 }
