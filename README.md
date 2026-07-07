@@ -4,6 +4,8 @@ RadioTEDU is a local-first AI radio station that runs one channel only: `RadioTE
 
 There is no demo mode and no invented listening data. Add your own local music before starting playback. If no playable music exists, the backend and dashboard still run, the station stays idle, and the dashboard asks you to add music and rescan.
 
+For the next implementation backlog, see [`docs/NEXT_TODOS.md`](docs/NEXT_TODOS.md).
+
 ## Quickstart
 
 ```bash
