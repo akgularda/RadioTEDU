@@ -20,15 +20,15 @@ Acceptance:
 ## P0 - One Broadcast Computer Runner
 
 - [x] Add one command for the broadcast machine, for example `scripts/run_broadcast_computer.py`.
-- [ ] Start or verify backend.
-- [ ] Start or verify the autonomous orchestrator.
+- [x] Start or verify backend.
+- [x] Start or verify the autonomous orchestrator.
 - [x] Start or verify the public snapshot pusher when configured.
 - [x] Render/check Liquidsoap config.
 - [x] Check Icecast reachability and mount state.
 - [x] Check Ollama and configured Qwen model readiness.
 - [x] Check TTS command readiness.
 - [x] Check music library readiness.
-- [ ] Keep running with local-only logs and backoff.
+- [x] Keep running with local-only logs and backoff.
 
 Acceptance:
 - The broadcast computer can be started with one script.

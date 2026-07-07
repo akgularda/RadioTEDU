@@ -51,6 +51,18 @@ def test_single_broadcast_computer_runner_exists() -> None:
     assert "uvicorn" in runner
 
 
+def test_broadcast_runner_declares_backend_orchestrator_and_backoff_contract() -> None:
+    runner = (ROOT / "scripts" / "run_broadcast_computer.py").read_text(encoding="utf-8")
+
+    assert "backend_readiness" in runner
+    assert "orchestrator_readiness" in runner
+    assert "run_backend_with_backoff" in runner
+    assert "restart-on-exit" in runner
+    assert "backoff_seconds" in runner
+    assert "autonomy_enabled" in runner
+    assert "settings.autonomy_enabled" in runner
+
+
 def test_two_machine_runbooks_and_smoke_scripts_exist() -> None:
     broadcast_runbook = ROOT / "docs" / "BROADCAST_COMPUTER_RUNBOOK.md"
     website_runbook = ROOT / "docs" / "WEBSITE_SERVER_RUNBOOK.md"
