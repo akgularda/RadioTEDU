@@ -37,6 +37,47 @@ def test_single_broadcast_computer_runner_exists() -> None:
     assert "uvicorn" in runner
 
 
+def test_two_machine_runbooks_and_smoke_scripts_exist() -> None:
+    broadcast_runbook = ROOT / "docs" / "BROADCAST_COMPUTER_RUNBOOK.md"
+    website_runbook = ROOT / "docs" / "WEBSITE_SERVER_RUNBOOK.md"
+    broadcast_smoke = ROOT / "scripts" / "smoke_broadcast.py"
+    public_smoke = ROOT / "scripts" / "smoke_public_server.py"
+
+    assert broadcast_runbook.exists()
+    assert website_runbook.exists()
+    assert broadcast_smoke.exists()
+    assert public_smoke.exists()
+
+    broadcast_text = broadcast_runbook.read_text(encoding="utf-8")
+    website_text = website_runbook.read_text(encoding="utf-8")
+    broadcast_script = broadcast_smoke.read_text(encoding="utf-8")
+    public_script = public_smoke.read_text(encoding="utf-8")
+
+    for required in [
+        "MUSIC_DIR=F:/Songs/Jazz",
+        "MIN_READY_ANNOUNCEMENTS=5",
+        "PUBLIC_SYNC_URL",
+        "Run Air",
+        "Liquidsoap",
+        "Icecast",
+        "Test TTS",
+    ]:
+        assert required in broadcast_text
+    for required in [
+        "radiotedu.com/ai",
+        "POST /api/public/snapshot",
+        "PUBLIC_SYNC_TOKEN",
+        "SNAPSHOT_TTL_SECONDS",
+        "session/start",
+        "No admin controls",
+    ]:
+        assert required in website_text
+    for required in ["check_ollama_setup", "liquidsoap_status", "public_sync_url", "music_library"]:
+        assert required in broadcast_script
+    for required in ["/api/public/status", "/api/public/session/start", "snapshot", "wrong token"]:
+        assert required in public_script
+
+
 def test_required_local_streaming_and_sync_helpers_exist() -> None:
     liquidsoap_runner = (ROOT / "scripts" / "run_liquidsoap.ps1").read_text(encoding="utf-8")
     icecast_checker = (ROOT / "scripts" / "check_icecast.py").read_text(encoding="utf-8")

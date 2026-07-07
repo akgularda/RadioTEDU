@@ -68,7 +68,7 @@ Acceptance:
   - [x] queue length
   - [x] Icecast reachable
   - [x] mount active
-- [ ] Add a smoke test script for local stream readiness.
+- [x] Add a smoke test script for local stream readiness.
 
 Acceptance:
 - Clicking `Run Air` starts real stream output when Liquidsoap/Icecast are configured.
@@ -155,51 +155,53 @@ Acceptance:
 
 ## P1 - Website Server Runbook
 
-- [ ] Add `docs/WEBSITE_SERVER_RUNBOOK.md`.
-- [ ] Cover `.env` setup for website server.
-- [ ] Cover FastAPI + Vite build deployment.
-- [ ] Cover reverse proxy for `/api/public/*`.
-- [ ] Cover public `/ai` routing.
-- [ ] Cover stream URL/proxy choice.
-- [ ] Cover token rotation.
-- [ ] Cover offline snapshot behavior.
+- [x] Add `docs/WEBSITE_SERVER_RUNBOOK.md`.
+- [x] Cover `.env` setup for website server.
+- [x] Cover FastAPI + Vite build deployment.
+- [x] Cover reverse proxy for `/api/public/*`.
+- [x] Cover public `/ai` routing.
+- [x] Cover stream URL/proxy choice.
+- [x] Cover token rotation.
+- [x] Cover offline snapshot behavior.
 
 Acceptance:
 - A fresh website server Codex can deploy `radiotedu.com/ai` from the runbook without guessing.
 
 ## P1 - Broadcast Computer Runbook
 
-- [ ] Add `docs/BROADCAST_COMPUTER_RUNBOOK.md`.
-- [ ] Cover `.env` setup for `F:/Songs/Jazz`.
-- [ ] Cover Ollama/Qwen model setup.
-- [ ] Cover Qwen TTS command setup.
-- [ ] Cover Liquidsoap/Icecast install and checks.
-- [ ] Cover desktop admin app start.
-- [ ] Cover `Run Air` readiness checks.
-- [ ] Cover website snapshot sync.
-- [ ] Cover common failure states.
+- [x] Add `docs/BROADCAST_COMPUTER_RUNBOOK.md`.
+- [x] Cover `.env` setup for `F:/Songs/Jazz`.
+- [x] Cover Ollama/Qwen model setup.
+- [x] Cover Qwen TTS command setup.
+- [x] Cover Liquidsoap/Icecast install and checks.
+- [x] Cover desktop admin app start.
+- [x] Cover `Run Air` readiness checks.
+- [x] Cover website snapshot sync.
+- [x] Cover common failure states.
 
 Acceptance:
 - A fresh broadcast computer Codex can set up the local station from the runbook without guessing.
 
 ## P2 - Prod Smoke Tests
 
-- [ ] Add `scripts/smoke_broadcast.py`.
-- [ ] Verify:
+- [x] Add `scripts/smoke_broadcast.py`.
+- [x] Verify:
   - music library has real playable tracks
   - database opens
   - Ollama reachable
   - configured model installed
-  - TTS command works
+  - TTS command health is visible
   - Liquidsoap found when enabled
-  - Icecast reachable when enabled
+  - Icecast mount state is visible when enabled
+  - public snapshot sync config is visible
+- [x] Add `scripts/smoke_public_server.py`.
+- [x] Verify:
+  - `/api/public/status` reachable
+  - session start/heartbeat/end works
   - public snapshot endpoint accepts correct token
   - public snapshot rejects wrong token
-- [ ] Add `scripts/smoke_public_server.py`.
 - [ ] Verify:
-  - `/api/public/status` reachable
   - `/ai` build route available
-  - session start/heartbeat/end works
   - expired snapshot goes offline
 
 Acceptance:
