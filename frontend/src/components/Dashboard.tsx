@@ -137,10 +137,22 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
           <div className="station-title-block">
             <h1>{status.channel.name}</h1>
             <p>{status.health.llm_runtime.status} / {status.channel.host_model || 'qwen2.5:0.5b-instruct'}</p>
+            <span className="local-only-pill">Local only operator app</span>
           </div>
           <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh">
             <RefreshCw size={18} />
           </button>
+        </div>
+
+        <div className="status-lights" aria-label="Status Lights">
+          <span className="status-lights-title">Status Lights</span>
+          <StatusLight label="Air" ok={status.channel.status === 'live'} />
+          <StatusLight label="Stream" ok={status.liquidsoap.running && !status.watchdog.icecast_mount_down} />
+          <StatusLight label="AI" ok={status.health.llm_runtime.status === 'ready'} />
+          <StatusLight label="TTS" ok={status.health.tts_runtime.status === 'ready'} />
+          <StatusLight label="Music" ok={status.music_library.playable_track_count > 0} />
+          <StatusLight label="Prebuffer" ok={status.observability.announcement_prebuffer.ready_to_broadcast} />
+          <StatusLight label="Website sync" ok={!status.website_sync.configured || status.website_sync.health === 'ready'} />
         </div>
 
         {status.setup.message ? <div className="setup-banner">{status.setup.message}</div> : null}
@@ -257,6 +269,15 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function StatusLight({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <span className={ok ? 'status-light status-light--ok' : 'status-light'}>
+      <i />
+      {label}
+    </span>
   );
 }
 

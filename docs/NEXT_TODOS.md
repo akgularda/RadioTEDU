@@ -58,10 +58,10 @@ Acceptance:
 
 - [x] Make the agent write a real Liquidsoap queue file.
 - [x] Queue sequence must include prebuffered announcement clips plus real tracks.
-- [ ] Use real file paths only locally; never expose them to public snapshot/API.
+- [x] Use real file paths only locally; never expose them to public snapshot/API.
 - [ ] Verify Liquidsoap can read the queue file.
 - [ ] Verify Icecast mount `/ai` becomes reachable.
-- [ ] Add health fields:
+- [x] Add health fields:
   - [x] liquidsoap installed
   - [x] liquidsoap running
   - [x] queue file exists
@@ -83,7 +83,7 @@ Acceptance:
 - [x] Do not block playback while waiting for the LLM.
 - [x] If AI is missing, try to start/check/pull configured Ollama/Qwen before falling back.
 - [x] Keep deterministic fallback only as a dead-air prevention path.
-- [ ] Add admin visibility:
+- [x] Add admin visibility:
   - [x] ready count
   - [x] required count
   - [x] queue age
@@ -211,7 +211,7 @@ Acceptance:
 
 - [ ] Make the admin app feel like broadcast software, not a website.
 - [ ] Use a compact operational layout.
-- [ ] Add clear status lights:
+- [x] Add clear status lights:
   - Air
   - Stream
   - AI
@@ -219,7 +219,7 @@ Acceptance:
   - Music
   - Prebuffer
   - Website sync
-- [ ] Add an explicit “local only” label for admin-only data.
+- [x] Add an explicit “local only” label for admin-only data.
 - [ ] Add keyboard-safe controls for Run/Stop/Skip.
 - [ ] Add confirmation for destructive or disruptive actions.
 

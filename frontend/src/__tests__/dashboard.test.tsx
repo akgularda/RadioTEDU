@@ -276,6 +276,9 @@ describe('Dashboard', () => {
     render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
 
     expect(screen.getByRole('heading', { name: 'RadioTEDU' })).toBeInTheDocument();
+    expect(screen.getByText('Local only operator app')).toBeInTheDocument();
+    expect(screen.getByText('Status Lights')).toBeInTheDocument();
+    expect(screen.getByText('Website sync')).toBeInTheDocument();
     expect(screen.getByText('Idle — waiting for music library.')).toBeInTheDocument();
     expect(screen.getByText('No music library found. Add audio files to data/music and click Rescan.')).toBeInTheDocument();
     expect(screen.getByText('Queue is empty.')).toBeInTheDocument();
@@ -292,7 +295,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Air Output')).toBeInTheDocument();
     expect(screen.getByText('Air Readiness')).toBeInTheDocument();
     expect(screen.getByText('0 playable tracks indexed.')).toBeInTheDocument();
-    expect(screen.getByText('TTS')).toBeInTheDocument();
+    expect(screen.getAllByText('TTS').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('fallback / dummy')).toBeInTheDocument();
     expect(screen.getByText('Maintenance')).toBeInTheDocument();
     expect(screen.getByText('Watchdog')).toBeInTheDocument();
