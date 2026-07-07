@@ -126,6 +126,7 @@ const emptyStatus: StatusResponse = {
     search: 'ok',
     weather: 'disabled',
     playback: 'simulate',
+    website_sync: 'not_configured',
   },
   weather: {
     available: false,
@@ -187,6 +188,30 @@ const emptyStatus: StatusResponse = {
     mount: '/ai',
     icecast_url: 'http://127.0.0.1:8001/ai',
   },
+  music_library: {
+    total_indexed_tracks: 0,
+    playable_track_count: 0,
+    last_scan_time: null,
+  },
+  configuration: {
+    MUSIC_DIR: 'data/music',
+    OLLAMA_MODEL: 'qwen3.5:4b',
+    TTS_COMMAND: 'dummy',
+    LIQUIDSOAP_PATH: 'liquidsoap',
+    LIQUIDSOAP_SCRIPT: 'data/liquidsoap/radiotedu.liq',
+    ICECAST_URL: 'http://127.0.0.1:8001/ai',
+    ICECAST_MOUNT: '/ai',
+    PUBLIC_SYNC_URL: '',
+    PUBLIC_STREAM_URL: '',
+    BUFFER_SIZES: { min: 5, max: 8 },
+  },
+  website_sync: {
+    configured: false,
+    health: 'not_configured',
+    public_sync_url: '',
+    public_stream_url: '',
+    interval_seconds: 10,
+  },
   setup: {
     has_music: false,
     message: 'No music library found. Add audio files to data/music and click Rescan.',
@@ -214,7 +239,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Air Output')).toBeInTheDocument();
     expect(screen.getByText('Selin / female')).toBeInTheDocument();
     expect(screen.getByText('tr_female_cool')).toBeInTheDocument();
-    expect(screen.getByText('/ai')).toBeInTheDocument();
+    expect(screen.getAllByText('/ai').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByRole('button', { name: 'Run Air' }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('button', { name: 'Stop Air' })).toBeInTheDocument();
     expect(screen.getByText('Start Icecast Air')).toBeInTheDocument();
@@ -227,6 +252,97 @@ describe('Dashboard', () => {
     expect(screen.getByText('Edit')).toBeInTheDocument();
     expect(screen.queryByText(/support|balance|money|donation|payment|revenue|profit/i)).toBeNull();
     expect(screen.queryByText(/OpenAIR|Grok and Roll|Backlink Broadcast|Thinking Frequencies/i)).toBeNull();
+  });
+
+  it('shows local operator controls, configuration, library stats, and log filters', async () => {
+    const user = userEvent.setup();
+    const operatorStatus = {
+      ...emptyStatus,
+      logs: [
+        {
+          level: 'info',
+          message: 'Music scan complete',
+          created_at: '2026-07-07T08:29:00+00:00',
+          metadata: {},
+        },
+        {
+          level: 'error',
+          message: 'Icecast unreachable',
+          created_at: '2026-07-07T08:30:00+00:00',
+          metadata: {},
+        },
+      ],
+      music_library: {
+        total_indexed_tracks: 1,
+        playable_track_count: 1,
+        last_scan_time: '2026-07-07T08:29:00+00:00',
+      },
+      configuration: {
+        MUSIC_DIR: 'F:/Songs/Jazz',
+        OLLAMA_MODEL: 'qwen3.5:4b',
+        TTS_COMMAND: 'python scripts/qwen_tts_command.py',
+        LIQUIDSOAP_SCRIPT: 'liquidsoap/radiotedu.liq',
+        ICECAST_URL: 'http://127.0.0.1:8000/ai',
+        ICECAST_MOUNT: '/ai',
+        PUBLIC_SYNC_URL: 'https://radiotedu.com/api/public/snapshot',
+        PUBLIC_STREAM_URL: 'https://radiotedu.com/ai/stream',
+        BUFFER_SIZES: { min: 5, max: 8 },
+      },
+      website_sync: {
+        configured: true,
+        health: 'configured',
+        public_sync_url: 'https://radiotedu.com/api/public/snapshot',
+        public_stream_url: 'https://radiotedu.com/ai/stream',
+        interval_seconds: 10,
+      },
+    } as unknown as StatusResponse;
+
+    render(<Dashboard status={operatorStatus} onRefresh={() => undefined} />);
+
+    expect(screen.getByRole('button', { name: 'Say Now' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate Covers' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rescan Music' })).toBeInTheDocument();
+    expect(screen.getByText('Music Library')).toBeInTheDocument();
+    expect(screen.getByText('Total Indexed Tracks')).toBeInTheDocument();
+    expect(screen.getByText('Playable Tracks')).toBeInTheDocument();
+    expect(screen.getByText('Configuration')).toBeInTheDocument();
+    expect(screen.getByText('MUSIC_DIR')).toBeInTheDocument();
+    expect(screen.getByText('F:/Songs/Jazz')).toBeInTheDocument();
+    expect(screen.getByText('PUBLIC_SYNC_URL')).toBeInTheDocument();
+    expect(screen.getByText('Website Sync')).toBeInTheDocument();
+    expect(screen.getByText('https://radiotedu.com/ai/stream')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Errors' }));
+
+    expect(screen.getByText('Icecast unreachable')).toBeInTheDocument();
+    expect(screen.queryByText('Music scan complete')).toBeNull();
+  });
+
+  it('sends manual announcements and cover generation through local admin APIs', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ queued: true }),
+    } as unknown as Response);
+    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue('A short RadioTEDU bulletin');
+
+    render(<Dashboard status={emptyStatus} onRefresh={() => undefined} />);
+
+    await user.click(screen.getByRole('button', { name: 'Say Now' }));
+    await user.click(screen.getByRole('button', { name: 'Generate Covers' }));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/control/say', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'A short RadioTEDU bulletin' }),
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/art/generate-program-covers', {
+      method: 'POST',
+      headers: undefined,
+      body: undefined,
+    });
+    fetchMock.mockRestore();
+    promptMock.mockRestore();
   });
 
   it('sends program edits through the API', async () => {

@@ -1,5 +1,5 @@
 import {
-  Download,
+  Image,
   MessageSquare,
   Play,
   RefreshCw,
@@ -7,6 +7,7 @@ import {
   Square,
   Pencil,
 } from 'lucide-react';
+import { useState } from 'react';
 
 import { patchJson, postControl, type Program, type StatusResponse } from '../api';
 
@@ -43,12 +44,12 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
     await control('/api/air/stop');
   }
 
-  async function sendFeedback() {
-    const text = window.prompt('Send RadioTEDU a local listener note');
+  async function sayNow() {
+    const text = window.prompt('Say now on RadioTEDU');
     if (!text?.trim()) {
       return;
     }
-    await control('/api/listener/feedback', { text, source: 'dashboard' });
+    await control('/api/control/say', { text: text.trim() });
   }
 
   async function editProgram(program: Program) {
@@ -129,13 +130,13 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         </div>
 
         <div className="actions-grid">
-          <button className="outline-button" type="button" onClick={sendFeedback}>
+          <button className="outline-button" type="button" onClick={sayNow}>
             <MessageSquare size={17} />
-            Message
+            Say Now
           </button>
-          <button className="outline-button outline-button--wide" type="button" onClick={() => window.alert('No generated clip is available yet.')}>
-            <Download size={17} />
-            Clip latest segment
+          <button className="outline-button" type="button" onClick={() => control('/api/art/generate-program-covers')}>
+            <Image size={17} />
+            Generate Covers
           </button>
         </div>
 
@@ -150,11 +151,11 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
           </button>
           <button type="button" onClick={() => control('/api/control/skip')}>
             <SkipForward size={15} />
-            Skip
+            Skip Track
           </button>
           <button type="button" onClick={() => control('/api/music/rescan')}>
             <RefreshCw size={15} />
-            Rescan
+            Rescan Music
           </button>
         </div>
 
@@ -162,6 +163,9 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
         <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
         <QueuePanel queue={status.queue} />
         <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
+        <MusicLibraryPanel library={status.music_library} />
+        <ConfigurationPanel configuration={status.configuration} />
+        <WebsiteSyncPanel sync={status.website_sync} />
         <StrategyPanel orchestrator={status.orchestrator} onCommand={control} />
         <AutonomyOps incidents={status.incidents} tasks={status.autonomous_tasks} />
         <RuntimeWatch observability={status.observability} />
@@ -342,6 +346,76 @@ function AirOutputPanel({
           <Square size={15} />
           Stop Icecast Air
         </button>
+      </div>
+    </section>
+  );
+}
+
+function MusicLibraryPanel({ library }: { library: StatusResponse['music_library'] }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Music Library</span>
+        <span>{library.playable_track_count ? 'Ready' : 'Empty'}</span>
+      </div>
+      <div className="health-grid">
+        <div>
+          <span>Total Indexed Tracks</span>
+          <strong>{library.total_indexed_tracks}</strong>
+        </div>
+        <div>
+          <span>Playable Tracks</span>
+          <strong>{library.playable_track_count}</strong>
+        </div>
+        <div>
+          <span>Last Scan</span>
+          <strong>{library.last_scan_time ? new Date(library.last_scan_time).toLocaleString() : 'No data'}</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ConfigurationPanel({ configuration }: { configuration: StatusResponse['configuration'] }) {
+  const entries = Object.entries(configuration);
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Configuration</span>
+        <span>Local</span>
+      </div>
+      <div className="health-grid config-grid">
+        {entries.map(([key, value]) => (
+          <div key={key}>
+            <span>{key}</span>
+            <strong>{formatConfigValue(value)}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WebsiteSyncPanel({ sync }: { sync: StatusResponse['website_sync'] }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Website Sync</span>
+        <span>{sync.health}</span>
+      </div>
+      <div className="health-grid">
+        <div>
+          <span>Snapshot Push</span>
+          <strong>{sync.configured ? 'Configured' : 'Not configured'}</strong>
+        </div>
+        <div>
+          <span>Interval</span>
+          <strong>{sync.interval_seconds}s</strong>
+        </div>
+        <div>
+          <span>Public Stream</span>
+          <strong>{sync.public_stream_url ? 'Configured' : 'Not configured'}</strong>
+        </div>
       </div>
     </section>
   );
@@ -542,15 +616,23 @@ function RuntimeWatch({ observability }: { observability: StatusResponse['observ
 }
 
 function LogPanel({ logs }: { logs: StatusResponse['logs'] }) {
+  const [level, setLevel] = useState<'all' | 'info' | 'warning' | 'error'>('all');
+  const filtered = level === 'all' ? logs : logs.filter((log) => log.level.toLowerCase() === level);
   return (
     <section className="section-block">
       <div className="section-heading">
         <span>Agent Logs</span>
-        <span>Recent</span>
+        <span>{filtered.length}</span>
       </div>
-      {logs.length ? (
+      <div className="log-filter">
+        <button type="button" aria-pressed={level === 'all'} onClick={() => setLevel('all')}>All</button>
+        <button type="button" aria-pressed={level === 'info'} onClick={() => setLevel('info')}>Info</button>
+        <button type="button" aria-pressed={level === 'warning'} onClick={() => setLevel('warning')}>Warnings</button>
+        <button type="button" aria-pressed={level === 'error'} onClick={() => setLevel('error')}>Errors</button>
+      </div>
+      {filtered.length ? (
         <ol className="log-list">
-          {logs.slice(0, 6).map((log, index) => (
+          {filtered.slice(0, 12).map((log, index) => (
             <li key={`${log.created_at}-${index}`}>
               <strong>{log.level}</strong>
               <span>{log.message}</span>
@@ -611,4 +693,15 @@ function formatDuration(totalSeconds: number) {
     return `${seconds}s`;
   }
   return `${minutes}m ${seconds}s`;
+}
+
+function formatConfigValue(value: unknown) {
+  if (value && typeof value === 'object') {
+    const buffer = value as { min?: number; max?: number };
+    if ('min' in buffer || 'max' in buffer) {
+      return `${buffer.min ?? 0} / ${buffer.max ?? 0}`;
+    }
+    return JSON.stringify(value);
+  }
+  return String(value || 'Not configured');
 }

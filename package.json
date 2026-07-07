@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "vite frontend --host 127.0.0.1 --port 5173",
+    "desktop:dev": "electron desktop/main.cjs",
+    "desktop:build": "npm run build && electron-builder",
     "build": "tsc -p frontend/tsconfig.json && vite build frontend",
     "test": "vitest --config frontend/vitest.config.ts --run"
   },
@@ -22,8 +25,25 @@
     "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
     "jsdom": "^25.0.1",
     "vitest": "^4.1.9"
+  },
+  "build": {
+    "appId": "edu.tedu.radiotedu.admin",
+    "productName": "RadioTEDU Admin Panel",
+    "files": [
+      "dist/**",
+      "desktop/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
   },
   "overrides": {
     "esbuild": "0.28.1"

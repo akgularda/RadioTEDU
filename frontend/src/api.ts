@@ -115,6 +115,7 @@ export interface SystemHealth {
   search: string;
   weather: string;
   playback: string;
+  website_sync: string;
 }
 
 export interface OrchestratorState {
@@ -172,6 +173,36 @@ export interface SetupState {
   message: string;
 }
 
+export interface MusicLibraryStats {
+  total_indexed_tracks: number;
+  playable_track_count: number;
+  last_scan_time: string | null;
+}
+
+export interface OperatorConfiguration {
+  MUSIC_DIR: string;
+  OLLAMA_MODEL: string;
+  TTS_COMMAND: string;
+  LIQUIDSOAP_PATH: string;
+  LIQUIDSOAP_SCRIPT: string;
+  ICECAST_URL: string;
+  ICECAST_MOUNT: string;
+  PUBLIC_SYNC_URL: string;
+  PUBLIC_STREAM_URL: string;
+  BUFFER_SIZES: {
+    min: number;
+    max: number;
+  };
+}
+
+export interface WebsiteSyncHealth {
+  configured: boolean;
+  health: string;
+  public_sync_url: string;
+  public_stream_url: string;
+  interval_seconds: number;
+}
+
 export interface WeatherContext {
   available: boolean;
   location: string;
@@ -202,6 +233,9 @@ export interface StatusResponse {
   observability: RuntimeObservability;
   orchestrator: OrchestratorState;
   liquidsoap: LiquidsoapState;
+  music_library: MusicLibraryStats;
+  configuration: OperatorConfiguration;
+  website_sync: WebsiteSyncHealth;
   setup: SetupState;
 }
 

@@ -60,7 +60,7 @@ class Settings:
     autonomy_enabled: bool = False
     autonomy_tick_seconds: int = 30
     strategy_interval_minutes: int = 240
-    min_ready_announcements: int = 0
+    min_ready_announcements: int = 5
     max_ready_announcements: int = 8
     liquidsoap_enabled: bool = False
     liquidsoap_queue_path: str = "data/liquidsoap/queue.m3u"
@@ -140,6 +140,18 @@ class Settings:
         for field in fields(cls):
             env_name = key_map[field.name]
             raw = _get(env_name, str(field.default), env_file)
+            if field.name == "liquidsoap_command":
+                raw = os.environ.get("LIQUIDSOAP_PATH", env_file.get("LIQUIDSOAP_PATH", raw))
+            elif field.name == "liquidsoap_script_path":
+                raw = os.environ.get("LIQUIDSOAP_SCRIPT", env_file.get("LIQUIDSOAP_SCRIPT", raw))
+            elif field.name == "liquidsoap_host":
+                raw = os.environ.get("ICECAST_HOST", env_file.get("ICECAST_HOST", raw))
+            elif field.name == "liquidsoap_port":
+                raw = os.environ.get("ICECAST_PORT", env_file.get("ICECAST_PORT", raw))
+            elif field.name == "liquidsoap_mount":
+                raw = os.environ.get("ICECAST_MOUNT", env_file.get("ICECAST_MOUNT", raw))
+            elif field.name == "liquidsoap_icecast_password":
+                raw = os.environ.get("ICECAST_PASSWORD", env_file.get("ICECAST_PASSWORD", raw))
             if field.type in (int, "int"):
                 values[field.name] = int(raw)
             elif field.type in (bool, "bool"):

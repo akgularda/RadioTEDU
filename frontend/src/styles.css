@@ -634,6 +634,30 @@ button {
   font-size: 11px;
 }
 
+.log-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.log-filter button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #dce2ea;
+  border-radius: 6px;
+  background: #fff;
+  color: #344155;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.log-filter button[aria-pressed='true'] {
+  border-color: #1f7a5b;
+  color: #145941;
+  background: #e8f6ef;
+}
+
 .strategy-copy {
   color: #253044;
   font-size: 13px;

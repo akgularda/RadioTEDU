@@ -141,6 +141,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/air/start")
     def air_start() -> dict:
+        readiness = air_start_readiness(settings, agent)
+        if not readiness["ready"]:
+            with connect(settings) as conn:
+                log_event(conn, "warning", "Run Air refused because local readiness checks failed.", readiness)
+                conn.commit()
+            return {"started": False, "reason": readiness["reason"], **readiness}
         stream = start_liquidsoap(settings) if settings.liquidsoap_enabled else {"started": True, "reason": "liquidsoap_disabled"}
         if settings.liquidsoap_enabled and not stream.get("started"):
             with connect(settings) as conn:
@@ -276,10 +282,85 @@ def build_status(settings: Settings, agent: RadioAgent, orchestrator: Autonomous
         "logs": recent_logs(settings),
         "health": health(settings, agent),
         "liquidsoap": liquidsoap_status(settings),
+        "music_library": music_library_status(settings),
+        "configuration": operator_configuration(settings),
+        "website_sync": website_sync_health(settings),
         "setup": {
             "has_music": has_music,
             "message": "" if has_music else "No music library found. Add audio files to data/music and click Rescan.",
         },
+    }
+
+
+def air_start_readiness(settings: Settings, agent: RadioAgent) -> dict:
+    library = music_library_status(settings)
+    if library["playable_track_count"] <= 0:
+        return {"ready": False, "reason": "no_music", "music_library": library}
+    program = current_program(settings)
+    buffer_state = agent.ensure_announcement_prebuffer(program["id"])
+    if not buffer_state["ready_to_broadcast"]:
+        return {
+            "ready": False,
+            "reason": "announcement_prebuffer_not_ready",
+            "music_library": library,
+            "announcement_buffer": buffer_state,
+        }
+    return {
+        "ready": True,
+        "reason": "ready",
+        "music_library": library,
+        "announcement_buffer": buffer_state,
+    }
+
+
+def music_library_status(settings: Settings) -> dict:
+    with connect(settings) as conn:
+        total = conn.execute("select count(*) from tracks").fetchone()[0]
+        playable = conn.execute("select count(*) from tracks where file_path <> ''").fetchone()[0]
+        scan = conn.execute(
+            """
+            select created_at
+            from agent_logs
+            where message like 'Music scan complete:%'
+            order by created_at desc, id desc
+            limit 1
+            """
+        ).fetchone()
+    return {
+        "total_indexed_tracks": int(total),
+        "playable_track_count": int(playable),
+        "last_scan_time": scan["created_at"] if scan else None,
+    }
+
+
+def operator_configuration(settings: Settings) -> dict:
+    mount = settings.liquidsoap_mount if settings.liquidsoap_mount.startswith("/") else f"/{settings.liquidsoap_mount}"
+    tts_command = settings.qwen_tts_command or settings.piper_tts_command or settings.tts_provider
+    return {
+        "MUSIC_DIR": settings.music_dir,
+        "OLLAMA_MODEL": settings.ollama_model,
+        "TTS_COMMAND": tts_command,
+        "LIQUIDSOAP_PATH": settings.liquidsoap_command,
+        "LIQUIDSOAP_SCRIPT": settings.liquidsoap_script_path,
+        "ICECAST_URL": f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{mount}",
+        "ICECAST_MOUNT": mount,
+        "PUBLIC_SYNC_URL": settings.public_sync_url,
+        "PUBLIC_STREAM_URL": settings.public_stream_url,
+        "BUFFER_SIZES": {
+            "min": int(settings.min_ready_announcements),
+            "max": int(settings.max_ready_announcements),
+        },
+    }
+
+
+def website_sync_health(settings: Settings) -> dict:
+    configured = bool(settings.public_sync_url and settings.public_sync_token)
+    return {
+        "configured": configured,
+        "health": "configured" if configured else "not_configured",
+        "public_sync_url": settings.public_sync_url,
+        "public_stream_url": settings.public_stream_url,
+        "interval_seconds": int(settings.public_sync_interval_seconds),
     }
 
 
@@ -486,6 +567,7 @@ def health(settings: Settings, agent: RadioAgent) -> dict:
         "search": settings.search_provider,
         "weather": settings.weather_provider if settings.weather_enabled else "disabled",
         "playback": agent.playback.health(),
+        "website_sync": website_sync_health(settings)["health"],
     }
 
 

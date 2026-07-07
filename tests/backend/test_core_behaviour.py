@@ -187,6 +187,60 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertEqual("", payload["setup"]["message"])
             self.assertEqual("Idle — ready to start RadioTEDU.", payload["now_playing"]["title"])
 
+    def test_run_air_refuses_to_start_without_real_music(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.min_ready_announcements = 5
+            client = TestClient(create_app(settings))
+
+            response = client.post("/api/air/start")
+            payload = response.json()
+            status = client.get("/api/status").json()
+
+            self.assertEqual(200, response.status_code)
+            self.assertFalse(payload["started"])
+            self.assertEqual("no_music", payload["reason"])
+            self.assertEqual(0, payload["music_library"]["playable_track_count"])
+            self.assertEqual("idle", status["channel"]["status"])
+
+    def test_status_exposes_operator_library_config_and_public_sync_health(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            settings.music_dir = str(root / "music")
+            settings.ollama_model = "qwen3.5:4b"
+            settings.qwen_tts_command = "python scripts/qwen_tts_command.py"
+            settings.liquidsoap_enabled = True
+            settings.liquidsoap_script_path = str(root / "liquidsoap" / "radiotedu.liq")
+            settings.liquidsoap_host = "127.0.0.1"
+            settings.liquidsoap_port = 8000
+            settings.liquidsoap_mount = "/ai"
+            settings.public_sync_url = "https://radiotedu.com/api/public/snapshot"
+            settings.public_sync_token = "secret-token"
+            settings.public_stream_url = "https://radiotedu.com/ai/stream"
+            settings.min_ready_announcements = 5
+            settings.max_ready_announcements = 8
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
+
+            payload = TestClient(create_app(settings)).get("/api/status").json()
+
+            self.assertEqual(1, payload["music_library"]["total_indexed_tracks"])
+            self.assertEqual(1, payload["music_library"]["playable_track_count"])
+            self.assertIsNotNone(payload["music_library"]["last_scan_time"])
+            self.assertEqual(settings.music_dir, payload["configuration"]["MUSIC_DIR"])
+            self.assertEqual("qwen3.5:4b", payload["configuration"]["OLLAMA_MODEL"])
+            self.assertEqual("python scripts/qwen_tts_command.py", payload["configuration"]["TTS_COMMAND"])
+            self.assertEqual(settings.liquidsoap_script_path, payload["configuration"]["LIQUIDSOAP_SCRIPT"])
+            self.assertEqual("http://127.0.0.1:8000/ai", payload["configuration"]["ICECAST_URL"])
+            self.assertEqual("https://radiotedu.com/api/public/snapshot", payload["configuration"]["PUBLIC_SYNC_URL"])
+            self.assertEqual("https://radiotedu.com/ai/stream", payload["configuration"]["PUBLIC_STREAM_URL"])
+            self.assertEqual({"min": 5, "max": 8}, payload["configuration"]["BUFFER_SIZES"])
+            self.assertEqual("configured", payload["website_sync"]["health"])
+            self.assertTrue(payload["website_sync"]["configured"])
+            self.assertNotIn("secret-token", json.dumps(payload))
+            self.assertNotIn("hackme", json.dumps(payload))
+
     def test_liquidsoap_config_streams_to_ai_mount_and_status_is_exposed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -221,6 +275,9 @@ class RadioTEDUCoreTests(unittest.TestCase):
             settings.playback_backend = "liquidsoap"
             settings.liquidsoap_command = "definitely-missing-liquidsoap"
             settings.liquidsoap_mount = "/ai"
+            settings.min_ready_announcements = 0
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            scan_music(settings)
 
             response = TestClient(create_app(settings)).post("/api/air/start")
             payload = response.json()
