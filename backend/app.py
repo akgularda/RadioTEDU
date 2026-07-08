@@ -8,12 +8,13 @@ import uvicorn
 from fastapi import Body, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .art.cover_generator import generate_covers
 from .config import Settings, ensure_runtime_dirs
 from .database import connect, init_db, log_event, now_iso, rows_to_dicts
-from .liquidsoap import liquidsoap_status, render_liquidsoap_config, start_liquidsoap, stop_liquidsoap
+from .liquidsoap import liquidsoap_status, render_liquidsoap_config, start_liquidsoap, stop_liquidsoap, verify_liquidsoap_output
 from .llm import ollama_runtime_status
 from .maintenance import maintenance_summary, run_maintenance, watchdog_summary
 from .models import ListenerFeedbackRequest, ProgramUpdateRequest, PublicSessionRequest, PublicSnapshotRequest, SayRequest, SearchRequest
@@ -69,6 +70,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     frontend_assets = frontend_dist / "assets"
     if frontend_assets.exists():
         app.mount("/assets", StaticFiles(directory=str(frontend_assets)), name="frontend_assets")
+
+    @app.middleware("http")
+    async def optional_admin_auth(request: Request, call_next):
+        if _requires_admin_token(settings, request):
+            if request.headers.get("X-RadioTEDU-Admin-Token") != settings.admin_api_token:
+                return JSONResponse({"detail": "invalid admin token"}, status_code=401)
+        return await call_next(request)
 
     @app.on_event("startup")
     def startup() -> None:
@@ -141,7 +149,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.patch("/api/programs/{program_id}")
     def update_program(program_id: str, request: ProgramUpdateRequest) -> dict:
-        return patch_program(settings, program_id, request)
+        try:
+            return patch_program(settings, program_id, request)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/schedule/week")
+    def schedule_week() -> dict:
+        return weekly_schedule(settings)
+
+    @app.get("/api/fallback-playlist")
+    def fallback_playlist() -> dict:
+        return emergency_fallback_playlist(settings)
 
     @app.get("/api/tracks/top")
     def tracks_top() -> list[dict]:
@@ -200,6 +219,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def say(request: SayRequest) -> dict:
         return agent.say(request.text)
 
+    @app.post("/api/clips/latest")
+    def clip_latest_segment() -> dict:
+        return latest_segment_clip(settings)
+
     @app.post("/api/tts/test")
     def tts_test(payload: dict = Body(default_factory=dict)) -> dict:
         program_id = str(payload.get("program_id") or current_program(settings)["id"])
@@ -255,6 +278,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/liquidsoap/status")
     def liquidsoap_status_endpoint() -> dict:
         return liquidsoap_status(settings)
+
+    @app.post("/api/liquidsoap/verify")
+    def liquidsoap_verify_endpoint() -> dict:
+        result = verify_liquidsoap_output(settings)
+        with connect(settings) as conn:
+            log_event(conn, "info" if result["verified"] else "warning", "Liquidsoap verification requested.", result)
+            conn.commit()
+        return result
 
     @app.post("/api/liquidsoap/start")
     def liquidsoap_start_endpoint() -> dict:
@@ -335,6 +366,8 @@ def build_status(
         "watchdog": watchdog,
         "configuration": operator_configuration(settings),
         "website_sync": website_sync_health(settings, public_snapshot_pusher),
+        "fallback_playlist": emergency_fallback_playlist(settings),
+        "schedule_week": weekly_schedule(settings),
         "setup": {
             "has_music": has_music,
             "message": "" if has_music else "No music library found. Add audio files to data/music and click Rescan.",
@@ -438,6 +471,15 @@ def _model_to_dict(model) -> dict:
     return model.dict()
 
 
+def _requires_admin_token(settings: Settings, request: Request) -> bool:
+    if not settings.admin_api_token:
+        return False
+    path = request.url.path
+    if path.startswith("/api/public/") or path.startswith("/static/") or path.startswith("/assets/") or path == "/ai":
+        return False
+    return request.method in {"POST", "PATCH", "PUT", "DELETE"} and path.startswith("/api/")
+
+
 def music_library_status(settings: Settings) -> dict:
     with connect(settings) as conn:
         total = conn.execute("select count(*) from tracks").fetchone()[0]
@@ -471,6 +513,7 @@ def operator_configuration(settings: Settings) -> dict:
         "ICECAST_MOUNT": mount,
         "PUBLIC_SYNC_URL": settings.public_sync_url,
         "PUBLIC_STREAM_URL": settings.public_stream_url,
+        "ADMIN_AUTH": "enabled" if settings.admin_api_token else "disabled",
         "BUFFER_SIZES": {
             "min": int(settings.min_ready_announcements),
             "max": int(settings.max_ready_announcements),
@@ -524,6 +567,7 @@ def website_sync_health(settings: Settings, public_snapshot_pusher: PublicSnapsh
 
 
 def patch_program(settings: Settings, program_id: str, request: ProgramUpdateRequest) -> dict:
+    _validate_program_update(request)
     allowed = {
         "name": request.name,
         "description": request.description,
@@ -573,6 +617,102 @@ def patch_program(settings: Settings, program_id: str, request: ProgramUpdateReq
         log_event(conn, "info", "Program edited from dashboard.", {"program_id": program_id, "fields": sorted(updates)})
         conn.commit()
         return dict(current)
+
+
+VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+
+
+def _validate_program_update(request: ProgramUpdateRequest) -> None:
+    for field_name in ("start_time", "end_time"):
+        value = getattr(request, field_name)
+        if value is not None:
+            _validate_time(value, field_name)
+    if request.days_of_week is not None:
+        days = [day.strip().lower() for day in request.days_of_week.split(",") if day.strip()]
+        if not days or any(day not in VALID_DAYS for day in days):
+            raise ValueError("days_of_week must use comma-separated mon,tue,wed,thu,fri,sat,sun values")
+    if request.active is not None and request.active not in {0, 1}:
+        raise ValueError("active must be 0 or 1")
+
+
+def _validate_time(value: str, field_name: str) -> None:
+    try:
+        hour_text, minute_text = value.split(":", 1)
+        hour = int(hour_text)
+        minute = int(minute_text)
+    except (ValueError, AttributeError):
+        raise ValueError(f"{field_name} must be HH:MM") from None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        raise ValueError(f"{field_name} must be HH:MM")
+
+
+def weekly_schedule(settings: Settings) -> dict:
+    day_order = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    with connect(settings) as conn:
+        programs = rows_to_dicts(conn.execute("select * from programs where channel_id='radiotedu' and active=1 order by start_time").fetchall())
+    days = []
+    for day in day_order:
+        items = [
+            {
+                "id": program["id"],
+                "name": program["name"],
+                "start_time": program["start_time"],
+                "end_time": program["end_time"],
+                "host_name": program.get("host_name"),
+                "vibe": program.get("vibe"),
+            }
+            for program in programs
+            if day in {part.strip().lower() for part in str(program["days_of_week"]).split(",")}
+        ]
+        days.append({"day": day, "programs": items})
+    return {"channel_id": "radiotedu", "days": days}
+
+
+def emergency_fallback_playlist(settings: Settings, limit: int = 8) -> dict:
+    with connect(settings) as conn:
+        rows = rows_to_dicts(
+            conn.execute(
+                """
+                select id, title, artist, genre, duration_seconds, file_path
+                from tracks
+                where file_path <> ''
+                order by coalesce(last_played_at, ''), play_count asc, title asc
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+        )
+    tracks = []
+    for row in rows:
+        file_path = str(row.pop("file_path") or "")
+        if not file_path or not Path(file_path).exists():
+            continue
+        tracks.append({**row, "file_exists": True})
+    return {"channel_id": "radiotedu", "count": len(tracks), "tracks": tracks}
+
+
+def latest_segment_clip(settings: Settings) -> dict:
+    with connect(settings) as conn:
+        row = conn.execute(
+            """
+            select clip_type, text, file_path, voice, program_id, created_at
+            from generated_clips
+            order by created_at desc, id desc
+            limit 1
+            """
+        ).fetchone()
+    if row is None:
+        return {"available": False, "reason": "no_generated_clips"}
+    item = dict(row)
+    file_path = Path(item.pop("file_path") or "")
+    if not file_path.exists():
+        return {"available": False, "reason": "clip_file_missing", **item}
+    return {
+        "available": True,
+        **item,
+        "file_name": file_path.name,
+        "file_exists": True,
+    }
 
 
 def metrics(settings: Settings) -> dict:

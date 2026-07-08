@@ -810,6 +810,71 @@ button {
   gap: 10px;
 }
 
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.week-grid div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #edf0f4;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.week-grid span,
+.week-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.week-grid span {
+  color: #738096;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.week-grid strong {
+  margin-top: 4px;
+  color: #243044;
+  font-size: 11px;
+  font-weight: 560;
+}
+
+.share-card-preview {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.share-card-preview img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.share-card-preview strong,
+.share-card-preview span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.share-card-preview strong {
+  color: #182132;
+  font-size: 13px;
+}
+
+.share-card-preview span {
+  margin-top: 3px;
+  color: #68758a;
+  font-size: 12px;
+}
+
 .program-item {
   display: grid;
   grid-template-columns: 48px 1fr;
@@ -1115,5 +1180,9 @@ button {
 
   .program-list {
     grid-template-columns: 1fr;
+  }
+
+  .week-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

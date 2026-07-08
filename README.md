@@ -311,6 +311,8 @@ PUBLIC_STREAM_URL=https://stream.radiotedu.com/ai
 
 The website server renders those snapshots at `https://radiotedu.com/ai` without exposing the broadcast computer, local file paths, logs, or admin controls. `PUBLIC_STREAM_URL` should point to the public Icecast stream URL, which can use the Icecast `/ai` mount on a stream subdomain or port.
 
+The admin `Air Output` panel also has `Verify Icecast Air`, which renders the Liquidsoap config, confirms the queue file is readable, checks that the script references the queue, and probes the configured Icecast mount. It reports the real mount state; it does not claim the stream is live when Icecast/Liquidsoap are missing.
+
 ## Cover Art
 
 RadioTEDU generates original deterministic square cover art with Python. Refresh assets with:
@@ -334,6 +336,10 @@ PATCH /api/programs/{program_id}
 ```
 
 Edits are recorded in `schedule_revisions`.
+
+Schedule edits validate `HH:MM` times and comma-separated `mon,tue,wed,thu,fri,sat,sun` day values. The admin dashboard also shows a weekly one-channel strategy view and an emergency fallback playlist built only from real indexed tracks.
+
+For trusted remote operators, set `ADMIN_API_TOKEN` on the broadcast server and store the same value in the browser local storage key `radiotedu_admin_token`. Public dashboard/session APIs remain available without that admin token.
 
 ## Observability
 

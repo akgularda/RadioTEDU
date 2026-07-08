@@ -51,6 +51,33 @@ output.icecast(
     }
 
 
+def verify_liquidsoap_output(settings: Settings) -> dict:
+    rendered = render_liquidsoap_config(settings)
+    status = liquidsoap_status(settings)
+    queue_path = Path(settings.liquidsoap_queue_path)
+    script_path = Path(settings.liquidsoap_script_path)
+    try:
+        queue_path.open("r", encoding="utf-8").close()
+        queue_readable = True
+        queue_error = None
+    except OSError as exc:
+        queue_readable = False
+        queue_error = str(exc)
+    try:
+        script_text = script_path.read_text(encoding="utf-8")
+        script_references_queue = queue_path.as_posix() in script_text
+    except OSError:
+        script_references_queue = False
+    return {
+        **rendered,
+        **status,
+        "queue_readable": queue_readable,
+        "queue_error": queue_error,
+        "script_references_queue": script_references_queue,
+        "verified": bool(queue_readable and script_references_queue and status["mount_active"]),
+    }
+
+
 def liquidsoap_status(settings: Settings, icecast_checker=None) -> dict:
     pid_path = liquidsoap_pid_path(settings)
     command_path = shutil.which(settings.liquidsoap_command)

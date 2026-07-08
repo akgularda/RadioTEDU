@@ -132,6 +132,7 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
           </div>
 
           <ScheduleSection program={currentProgram} minutesLeft={status.current_minutes_left} nextProgram={status.next_program} />
+          <ShareCard card={status.share_card} />
           <TopSongs songs={status.top_songs} />
           <GenreBars genres={status.top_genres} />
           <ContentBreakdown items={status.content_breakdown} />
@@ -139,6 +140,24 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
         </section>
       </div>
     </main>
+  );
+}
+
+function ShareCard({ card }: { card: PublicDashboardProps['status']['share_card'] }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Share Card</span>
+        <span>Now Playing</span>
+      </div>
+      <div className="share-card-preview">
+        <img src={card.image} alt="" />
+        <div>
+          <strong>{card.title}</strong>
+          <span>{card.text}</span>
+        </div>
+      </div>
+    </section>
   );
 }
 

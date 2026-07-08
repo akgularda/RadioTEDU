@@ -89,6 +89,7 @@ def public_snapshot_from_state(settings: Settings, agent) -> dict:
             "average_session": None,
         },
     }
+    snapshot["share_card"] = _share_card(snapshot)
     return sanitize_public_snapshot(snapshot)
 
 
@@ -117,6 +118,7 @@ def sanitize_public_snapshot(payload: dict) -> dict:
         "popularity": None,
         "average_session": None,
     }
+    safe["share_card"] = _share_card(safe)
     return safe
 
 
@@ -318,7 +320,7 @@ class PublicSnapshotPusher:
 
 
 def _offline_public_status(settings: Settings, metrics: dict) -> dict:
-    return {
+    payload = {
         "online": False,
         "schema_version": 1,
         "received_at": None,
@@ -346,6 +348,8 @@ def _offline_public_status(settings: Settings, metrics: dict) -> dict:
         "stream": {"url": settings.public_stream_url, "status": "configured" if settings.public_stream_url else "unconfigured"},
         "metrics": metrics,
     }
+    payload["share_card"] = _share_card(payload)
+    return payload
 
 
 def _public_channel(channel: dict) -> dict:
@@ -438,6 +442,25 @@ def _public_activity(value: dict) -> dict | None:
 def _public_stream(stream: dict) -> dict:
     url = _text(stream.get("url"))[:300]
     return {"url": url, "status": "configured" if url else "unconfigured"}
+
+
+def _share_card(payload: dict) -> dict:
+    channel = _dict(payload.get("channel"))
+    now = _dict(payload.get("now_playing"))
+    stream = _dict(payload.get("stream"))
+    title = _text(now.get("title") or PUBLIC_EMPTY_NOW["title"])
+    artist = _text(now.get("artist"))
+    display_title = title if title != PUBLIC_EMPTY_NOW["title"] else "RadioTEDU"
+    text = f"{display_title} by {artist}" if artist else display_title
+    card = {
+        "title": f"RadioTEDU: {display_title}"[:120],
+        "text": text[:180],
+        "url": _public_stream(stream)["url"],
+        "image": _public_path(channel.get("cover_path")) or "/static/generated/covers/radiotedu_station.png",
+    }
+    if _has_private_terms(json.dumps(card, ensure_ascii=True)):
+        return {"title": "RadioTEDU", "text": "AI radio from RadioTEDU.", "url": "", "image": "/static/generated/covers/radiotedu_station.png"}
+    return card
 
 
 def _is_stale(received_at: str, ttl_seconds: int) -> bool:

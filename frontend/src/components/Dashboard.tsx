@@ -273,6 +273,7 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
 
         <div className="admin-panel-deck" aria-label="Broadcast operations">
           <ScheduleSection program={currentProgram} />
+          <WeeklyStrategyPanel schedule={status.schedule_week} />
           <ProgramsPanel programs={status.programs} currentProgramId={currentProgram?.id || null} onEdit={editProgram} />
           {editingProgram && programDraft ? (
             <ProgramEditPanel
@@ -287,12 +288,14 @@ export function Dashboard({ status, onRefresh }: DashboardProps) {
             />
           ) : null}
           <QueuePanel queue={status.queue} />
+          <EmergencyPlaylistPanel playlist={status.fallback_playlist} />
           <AirReadinessPanel readiness={status.air_readiness} />
           <AirOutputPanel liquidsoap={status.liquidsoap} onCommand={control} />
           <TtsPanel health={status.health.tts_runtime} currentProgramId={currentProgram?.id || null} onCommand={control} />
           <MaintenancePanel maintenance={status.maintenance} watchdog={status.watchdog} onCommand={control} />
           <MusicLibraryPanel library={status.music_library} />
           <ConfigurationPanel configuration={status.configuration} />
+          <OperatorAccessPanel configuration={status.configuration} />
           <WebsiteSyncPanel sync={status.website_sync} />
           <StrategyPanel orchestrator={status.orchestrator} onCommand={control} />
           <AutonomyOps incidents={status.incidents} tasks={status.autonomous_tasks} />
@@ -360,6 +363,25 @@ function ScheduleSection({ program }: { program: StatusResponse['current_program
       ) : (
         <p className="muted">Nothing scheduled</p>
       )}
+    </section>
+  );
+}
+
+function WeeklyStrategyPanel({ schedule }: { schedule: StatusResponse['schedule_week'] }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Weekly Strategy</span>
+        <span>One Channel</span>
+      </div>
+      <div className="week-grid">
+        {schedule.days.map((day) => (
+          <div key={day.day}>
+            <span>{day.day}</span>
+            <strong>{day.programs.length ? day.programs.map((program) => program.name).join(', ') : 'Open'}</strong>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -547,6 +569,10 @@ function AirOutputPanel({
         </div>
       </div>
       <div className="strategy-actions">
+        <button type="button" onClick={() => onCommand('/api/liquidsoap/verify')}>
+          <RefreshCw size={15} />
+          Verify Icecast Air
+        </button>
         <button type="button" onClick={() => onCommand('/api/liquidsoap/render')}>
           <RefreshCw size={15} />
           Render Config
@@ -649,6 +675,10 @@ function MaintenancePanel({
         </div>
       </div>
       <div className="strategy-actions">
+        <button type="button" onClick={() => onCommand('/api/clips/latest')}>
+          <RefreshCw size={15} />
+          Clip Latest Segment
+        </button>
         <button type="button" onClick={() => onCommand('/api/maintenance/run')}>
           <RefreshCw size={15} />
           Run Maintenance
@@ -679,6 +709,29 @@ function MusicLibraryPanel({ library }: { library: StatusResponse['music_library
           <strong>{library.last_scan_time ? new Date(library.last_scan_time).toLocaleString() : 'No data'}</strong>
         </div>
       </div>
+    </section>
+  );
+}
+
+function EmergencyPlaylistPanel({ playlist }: { playlist: StatusResponse['fallback_playlist'] }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Emergency Playlist</span>
+        <span>{playlist.count}</span>
+      </div>
+      {playlist.tracks.length ? (
+        <ol className="rank-list">
+          {playlist.tracks.slice(0, 5).map((track) => (
+            <li key={track.id}>
+              <span>{track.title} <em>- {track.artist}</em></span>
+              <strong>{track.genre || 'Track'}</strong>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="muted">No real indexed fallback tracks yet.</p>
+      )}
     </section>
   );
 }
@@ -726,6 +779,27 @@ function WebsiteSyncPanel({ sync }: { sync: StatusResponse['website_sync'] }) {
         <div>
           <span>Public Stream</span>
           <strong>{sync.public_stream_url ? 'Configured' : 'Not configured'}</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OperatorAccessPanel({ configuration }: { configuration: StatusResponse['configuration'] }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <span>Mobile Operator</span>
+        <span>Admin Auth</span>
+      </div>
+      <div className="health-grid">
+        <div>
+          <span>Responsive View</span>
+          <strong>Ready</strong>
+        </div>
+        <div>
+          <span>Admin Auth</span>
+          <strong>{configuration.ADMIN_AUTH || 'disabled'}</strong>
         </div>
       </div>
     </section>

@@ -269,6 +269,32 @@ const emptyStatus: StatusResponse = {
     has_music: false,
     message: 'No music library found. Add audio files to data/music and click Rescan.',
   },
+  fallback_playlist: {
+    channel_id: 'radiotedu',
+    count: 1,
+    tracks: [
+      {
+        id: 1,
+        title: 'Blue Room',
+        artist: 'Alice',
+        genre: 'Jazz',
+        duration_seconds: 120,
+        file_exists: true,
+      },
+    ],
+  },
+  schedule_week: {
+    channel_id: 'radiotedu',
+    days: [
+      { day: 'mon', programs: [{ id: 'night_lab', name: 'Jazz Lab', start_time: '18:00', end_time: '23:00', host_name: 'Selin', vibe: 'late jazz' }] },
+      { day: 'tue', programs: [] },
+      { day: 'wed', programs: [] },
+      { day: 'thu', programs: [] },
+      { day: 'fri', programs: [] },
+      { day: 'sat', programs: [] },
+      { day: 'sun', programs: [] },
+    ],
+  },
 };
 
 describe('Dashboard', () => {
@@ -310,6 +336,13 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Weather')).toBeNull();
     expect(screen.queryByText('No weather data.')).toBeNull();
     expect(screen.getByText('Runtime Watch')).toBeInTheDocument();
+    expect(screen.getByText('Weekly Strategy')).toBeInTheDocument();
+    expect(screen.getByText('Emergency Playlist')).toBeInTheDocument();
+    expect(screen.getAllByText('Blue Room').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Mobile Operator')).toBeInTheDocument();
+    expect(screen.getAllByText('Admin Auth').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: 'Verify Icecast Air' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clip Latest Segment' })).toBeInTheDocument();
     expect(screen.getByText('unreachable (qwen3.5:4b)')).toBeInTheDocument();
     expect(screen.getByText('cli_missing: ollama pull qwen3.5:4b')).toBeInTheDocument();
     expect(screen.getByText('0/5')).toBeInTheDocument();
@@ -628,6 +661,12 @@ const publicStatus: PublicStatusResponse = {
     popularity: null,
     average_session: null,
   },
+  share_card: {
+    title: 'RadioTEDU: Blue Room',
+    text: 'Blue Room by Alice',
+    url: 'https://radiotedu.com/live.mp3',
+    image: '/static/generated/covers/radiotedu_station.png',
+  },
 };
 
 describe('PublicDashboard', () => {
@@ -647,6 +686,8 @@ describe('PublicDashboard', () => {
     expect(screen.getByText(/Up next at 06:00: TEDU Dawn/)).toBeInTheDocument();
     expect(screen.getByText(/Jazz 100%/)).toBeInTheDocument();
     expect(screen.getByText('Content Breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Share Card')).toBeInTheDocument();
+    expect(screen.getByText('Blue Room by Alice')).toBeInTheDocument();
     expect(screen.getByText(/Music 84%/)).toBeInTheDocument();
     expect(screen.getByText('RadioTEDU Activity')).toBeInTheDocument();
     expect(screen.getByText('more mellow piano after midnight')).toBeInTheDocument();

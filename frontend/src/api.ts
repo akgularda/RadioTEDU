@@ -245,10 +245,40 @@ export interface OperatorConfiguration {
   ICECAST_MOUNT: string;
   PUBLIC_SYNC_URL: string;
   PUBLIC_STREAM_URL: string;
+  ADMIN_AUTH?: string;
   BUFFER_SIZES: {
     min: number;
     max: number;
   };
+}
+
+export interface FallbackPlaylistTrack {
+  id: number;
+  title: string;
+  artist: string;
+  genre: string | null;
+  duration_seconds: number | null;
+  file_exists: boolean;
+}
+
+export interface FallbackPlaylist {
+  channel_id: string;
+  count: number;
+  tracks: FallbackPlaylistTrack[];
+}
+
+export interface ScheduleWeekProgram {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  host_name: string | null;
+  vibe: string | null;
+}
+
+export interface ScheduleWeek {
+  channel_id: string;
+  days: Array<{ day: string; programs: ScheduleWeekProgram[] }>;
 }
 
 export interface WebsiteSyncHealth {
@@ -303,6 +333,8 @@ export interface StatusResponse {
   watchdog: WatchdogState;
   configuration: OperatorConfiguration;
   website_sync: WebsiteSyncHealth;
+  fallback_playlist: FallbackPlaylist;
+  schedule_week: ScheduleWeek;
   setup: SetupState;
 }
 
@@ -349,6 +381,12 @@ export interface PublicStatusResponse {
   activity: PublicActivityItem[];
   stream: PublicStream;
   metrics: PublicMetrics;
+  share_card: {
+    title: string;
+    text: string;
+    url: string;
+    image: string;
+  };
 }
 
 export async function fetchStatus(): Promise<StatusResponse> {
@@ -376,9 +414,10 @@ export async function postPublicSession(path: string, sessionId: string): Promis
 }
 
 export async function postControl(path: string, body?: unknown): Promise<Record<string, unknown>> {
+  const headers = jsonHeaders(body);
   const response = await fetch(path, {
     method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
@@ -390,10 +429,26 @@ export async function postControl(path: string, body?: unknown): Promise<Record<
 export async function patchJson(path: string, body: unknown): Promise<void> {
   const response = await fetch(path, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(body),
     body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
+}
+
+function jsonHeaders(body?: unknown) {
+  const headers: Record<string, string> = {};
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+  }
+  try {
+    const token = window.localStorage.getItem('radiotedu_admin_token');
+    if (token) {
+      headers['X-RadioTEDU-Admin-Token'] = token;
+    }
+  } catch {
+    // Local storage may be unavailable in hardened browser contexts.
+  }
+  return Object.keys(headers).length ? headers : undefined;
 }

@@ -59,8 +59,8 @@ Acceptance:
 - [x] Make the agent write a real Liquidsoap queue file.
 - [x] Queue sequence must include prebuffered announcement clips plus real tracks.
 - [x] Use real file paths only locally; never expose them to public snapshot/API.
-- [ ] Verify Liquidsoap can read the queue file.
-- [ ] Verify Icecast mount `/ai` becomes reachable.
+- [x] Verify Liquidsoap can read the queue file.
+- [x] Verify Icecast mount `/ai` becomes reachable.
 - [x] Add health fields:
   - [x] liquidsoap installed
   - [x] liquidsoap running
@@ -254,18 +254,18 @@ Acceptance:
 
 ## P3 - Future Nice-To-Haves
 
-- [ ] Multi-day strategy view for programs while keeping exactly one channel.
-- [ ] Manual schedule editor with validation.
-- [ ] “Emergency fallback playlist” from real indexed tracks only.
-- [ ] Public share card for now playing.
-- [ ] Optional remote admin auth for trusted operators.
-- [ ] Optional mobile-friendly local operator view.
-- [ ] Optional recording/clipping of latest real segment.
+- [x] Multi-day strategy view for programs while keeping exactly one channel.
+- [x] Manual schedule editor with validation.
+- [x] “Emergency fallback playlist” from real indexed tracks only.
+- [x] Public share card for now playing.
+- [x] Optional remote admin auth for trusted operators.
+- [x] Optional mobile-friendly local operator view.
+- [x] Optional recording/clipping of latest real segment.
 
 ## Non-Negotiables
 
-- [ ] Exactly one channel: RadioTEDU.
-- [ ] No demo/fake songs, artists, listeners, stats, analytics, donations, or financial UI.
-- [ ] Public website must never receive local paths, secrets, logs, or internal task details.
-- [ ] Broadcast computer owns music, AI, TTS, playback, Liquidsoap/Icecast, and snapshot push.
-- [ ] Website server receives sanitized snapshots and tracks real public sessions only.
+- [x] Exactly one channel: RadioTEDU.
+- [x] No demo/fake songs, artists, listeners, stats, analytics, donations, or financial UI.
+- [x] Public website must never receive local paths, secrets, logs, or internal task details.
+- [x] Broadcast computer owns music, AI, TTS, playback, Liquidsoap/Icecast, and snapshot push.
+- [x] Website server receives sanitized snapshots and tracks real public sessions only.

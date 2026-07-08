@@ -77,6 +77,7 @@ class Settings:
     public_sync_token: str = ""
     public_sync_interval_seconds: int = 10
     snapshot_ttl_seconds: int = 30
+    admin_api_token: str = ""
     news_enabled: bool = False
     news_interval_minutes: int = 60
     news_max_age_hours: int = 24
@@ -135,6 +136,7 @@ class Settings:
             "public_sync_token": "PUBLIC_SYNC_TOKEN",
             "public_sync_interval_seconds": "PUBLIC_SYNC_INTERVAL_SECONDS",
             "snapshot_ttl_seconds": "SNAPSHOT_TTL_SECONDS",
+            "admin_api_token": "ADMIN_API_TOKEN",
             "news_enabled": "NEWS_ENABLED",
             "news_interval_minutes": "NEWS_INTERVAL_MINUTES",
             "news_max_age_hours": "NEWS_MAX_AGE_HOURS",

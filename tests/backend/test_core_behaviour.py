@@ -1202,6 +1202,88 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertIn("ollama pull qwen3.5:4b", payload["suggested_commands"])
             self.assertNotRegex(str(payload).lower(), r"money|payment|donation|support|revenue|profit|buy|purchase")
 
+    def test_program_updates_validate_schedule_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            client = TestClient(create_app(settings))
+
+            bad_time = client.patch("/api/programs/night_lab", json={"start_time": "25:99"})
+            bad_days = client.patch("/api/programs/night_lab", json={"days_of_week": "mon,funday"})
+            valid = client.patch("/api/programs/night_lab", json={"start_time": "19:00", "end_time": "23:30", "days_of_week": "fri,sat"})
+
+            self.assertEqual(400, bad_time.status_code)
+            self.assertEqual(400, bad_days.status_code)
+            self.assertEqual(200, valid.status_code)
+            self.assertEqual("19:00", valid.json()["start_time"])
+            self.assertEqual("fri,sat", valid.json()["days_of_week"])
+
+    def test_emergency_fallback_playlist_uses_real_indexed_tracks_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = self.make_settings(root)
+            make_wav(root / "music" / "Alice - Blue Room.wav")
+            make_wav(root / "music" / "Ben - Amber Night.wav")
+            scan_music(settings)
+            client = TestClient(create_app(settings))
+
+            payload = client.get("/api/fallback-playlist").json()
+
+            self.assertEqual(2, payload["count"])
+            self.assertTrue(all(item["file_exists"] for item in payload["tracks"]))
+            self.assertEqual({"Blue Room", "Amber Night"}, {item["title"] for item in payload["tracks"]})
+            self.assertNotRegex(json.dumps(payload).lower(), r"fake|demo|donation|payment|money|support")
+
+    def test_public_status_exposes_sanitized_share_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.public_sync_token = "secret-token"
+            settings.public_stream_url = "https://radiotedu.com/ai"
+            client = TestClient(create_app(settings))
+            response = client.post(
+                "/api/public/snapshot",
+                headers={"X-RadioTEDU-Sync-Token": "secret-token"},
+                json={
+                    "channel": {"id": "radiotedu", "name": "RadioTEDU", "status": "live", "cover_path": "/static/generated/covers/radiotedu_station.png"},
+                    "now_playing": {"type": "track", "title": "Blue Room", "artist": "Alice"},
+                    "stream": {"url": "https://radiotedu.com/ai"},
+                },
+            )
+            self.assertEqual(200, response.status_code)
+
+            payload = client.get("/api/public/status").json()
+
+            self.assertEqual("RadioTEDU: Blue Room", payload["share_card"]["title"])
+            self.assertEqual("https://radiotedu.com/ai", payload["share_card"]["url"])
+            self.assertNotRegex(json.dumps(payload["share_card"]).lower(), r"f:/|file_path|token|payment|money|support")
+
+    def test_optional_admin_auth_protects_local_control_endpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.admin_api_token = "local-secret"
+            client = TestClient(create_app(settings))
+
+            denied = client.post("/api/air/stop")
+            allowed = client.post("/api/air/stop", headers={"X-RadioTEDU-Admin-Token": "local-secret"})
+            public = client.get("/api/public/status")
+
+            self.assertEqual(401, denied.status_code)
+            self.assertEqual(200, allowed.status_code)
+            self.assertEqual(200, public.status_code)
+
+    def test_liquidsoap_verify_reports_queue_and_mount_without_starting_services(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self.make_settings(Path(tmp))
+            settings.liquidsoap_enabled = True
+            settings.liquidsoap_command = "definitely-missing-liquidsoap"
+            client = TestClient(create_app(settings))
+
+            payload = client.post("/api/liquidsoap/verify").json()
+
+            self.assertTrue(payload["queue_readable"])
+            self.assertFalse(payload["command_found"])
+            self.assertFalse(payload["mount_active"])
+            self.assertIn("/ai", payload["icecast_url"])
+
 
 if __name__ == "__main__":
     unittest.main()
