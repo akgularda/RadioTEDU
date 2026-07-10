@@ -697,6 +697,22 @@ describe('PublicDashboard', () => {
     expect(screen.queryByText(/OpenAIR|Grok and Roll|Backlink Broadcast|Thinking Frequencies/i)).toBeNull();
   });
 
+  it('keeps the last broadcast snapshot visible when live polling is interrupted', () => {
+    render(
+      <PublicDashboard
+        status={publicStatus}
+        connectionError="Public status request failed: 503"
+      />,
+    );
+
+    expect(screen.getByText('Blue Room')).toBeInTheDocument();
+    expect(screen.getAllByText('Jazz Lab').length).toBeGreaterThan(0);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Live data connection interrupted. Showing the last received broadcast snapshot.',
+    );
+    expect(screen.queryByText('Public status request failed: 503')).toBeNull();
+  });
+
   it('acknowledges copying the stream link when Clipboard API is unavailable', async () => {
     const user = userEvent.setup();
 

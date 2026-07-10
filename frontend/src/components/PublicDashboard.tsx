@@ -5,9 +5,10 @@ import { postPublicSession, type PublicStatusResponse } from '../api';
 
 interface PublicDashboardProps {
   status: PublicStatusResponse;
+  connectionError?: string | null;
 }
 
-export function PublicDashboard({ status }: PublicDashboardProps) {
+export function PublicDashboard({ status, connectionError = null }: PublicDashboardProps) {
   const cover = status.channel.cover_path || '/static/generated/covers/radiotedu_station.png';
   const logo = '/static/generated/covers/radiotedu_logo.png';
   const currentProgram = status.current_program || status.programs[0] || null;
@@ -86,6 +87,11 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
           </div>
 
           {status.message ? <div className="setup-banner">{status.message}</div> : null}
+          {connectionError ? (
+            <div className="public-connection-notice" role="status">
+              Live data connection interrupted. Showing the last received broadcast snapshot.
+            </div>
+          ) : null}
 
           <div className="now-playing-row public-now-playing">
             <button className="play-button" type="button" onClick={togglePlay} aria-label={playing ? 'Pause stream' : 'Play stream'} disabled={!status.stream.url}>
