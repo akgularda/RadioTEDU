@@ -675,6 +675,19 @@ describe('PublicDashboard', () => {
 
     render(<PublicDashboard status={publicStatus} />);
 
+    expect(screen.getByRole('img', { name: 'RadioTEDU' })).toHaveAttribute(
+      'src',
+      '/static/generated/covers/radiotedu_logo_source.png',
+    );
+    expect(screen.getByRole('img', { name: 'RadioTEDU station cover' })).toHaveAttribute(
+      'src',
+      '/static/generated/covers/radiotedu_station.png',
+    );
+    expect(screen.getByRole('region', { name: 'Current program' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Jazz Lab program cover' })).toHaveAttribute(
+      'src',
+      '/static/generated/covers/night_lab.png',
+    );
     expect(screen.getByRole('heading', { name: 'RadioTEDU' })).toBeInTheDocument();
     expect(screen.getByText('Waiting for the broadcast computer to sync.')).toBeInTheDocument();
     expect(screen.getByText('Waiting for RadioTEDU broadcast.')).toBeInTheDocument();
