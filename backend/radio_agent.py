@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 from .config import Settings
@@ -13,7 +15,9 @@ from .scheduler import current_program
 from .search.rss import RSSSearchProvider
 from .search.searxng import SearXNGSearchProvider
 from .stations.context import StationContext, coerce_station_context
+from .tts.contracts import AnnouncementLabel, SynthesisRequest
 from .tts.factory import build_tts_provider
+from .tts.voice_policy import VoicePolicy
 from .weather.open_meteo import OpenMeteoWeatherProvider
 
 
@@ -26,7 +30,10 @@ class RadioAgent:
         )
         init_db(self._database_runtime)
         self.playback = PlaybackController(self.settings)
-        self.tts = build_tts_provider(self.settings)
+        self.tts = build_tts_provider(
+            self.context,
+            os.environ.get("QWEN_TTS_SERVICE_URL", "http://127.0.0.1:8090"),
+        )
         self.last_search_at: datetime | None = None
         self.weather_provider = OpenMeteoWeatherProvider(self.settings)
         self.last_weather_at: datetime | None = None
@@ -72,7 +79,12 @@ class RadioAgent:
             return {"queued": False, "reason": "empty_text"}
         filename = f"say_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.wav"
         output = self.settings.tts_path / filename
-        clip_path = self.tts.synthesize(safe_text, str(output))
+        clip_path = self._synthesize_qwen(
+            safe_text,
+            output,
+            announcement_label="listener_reply",
+            program_id="manual",
+        )
         item = QueueItem("tts", "User message", clip_path, duration_seconds=1.0)
         self.playback.add(item)
         with connect(self._database_runtime) as conn:
@@ -136,8 +148,13 @@ class RadioAgent:
         reply = self._listener_reply_text(safe_feedback, program)
         filename = f"listener_reply_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}.wav"
         output = self.settings.tts_path / filename
-        voice = self._program_voice(program)
-        clip_path = self.tts.synthesize(reply, str(output), voice=voice)
+        voice = self.tts.provider_name
+        clip_path = self._synthesize_qwen(
+            reply,
+            output,
+            announcement_label="listener_reply",
+            program_id=program["id"],
+        )
         self.playback.add(QueueItem("tts", "RadioTEDU listener reply", clip_path, duration_seconds=1.0))
         with connect(self._database_runtime) as conn:
             conn.execute(
@@ -290,8 +307,13 @@ class RadioAgent:
                 planned_track_ids.add(int(track_id))
             filename = f"prebuffer_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}.wav"
             output = self.settings.tts_path / filename
-            voice = self._program_voice(program)
-            clip_path = self.tts.synthesize(text, str(output), voice=voice)
+            voice = self.tts.provider_name
+            clip_path = self._synthesize_qwen(
+                text,
+                output,
+                announcement_label="track_intro",
+                program_id=target_program_id,
+            )
             with connect(self._database_runtime) as conn:
                 if track_id is not None and self._ready_track_exists(conn, program_id or program["id"], int(track_id)):
                     conn.commit()
@@ -733,8 +755,13 @@ class RadioAgent:
         filename = f"dj_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.wav"
         output = self.settings.tts_path / filename
         program = current_program(self._database_runtime)
-        voice = self._program_voice(program)
-        clip_path = self.tts.synthesize(text, str(output), voice=voice)
+        voice = self.tts.provider_name
+        clip_path = self._synthesize_qwen(
+            text,
+            output,
+            announcement_label="track_intro",
+            program_id=program_id,
+        )
         with connect(self._database_runtime) as conn:
             conn.execute(
                 "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
@@ -742,6 +769,43 @@ class RadioAgent:
             )
             conn.commit()
         return clip_path
+
+    def _synthesize_qwen(
+        self,
+        text: str,
+        output_path,
+        *,
+        announcement_label: AnnouncementLabel,
+        program_id: str,
+    ) -> str:
+        """Build a station-bound request; generated text cannot select a voice."""
+        policy = VoicePolicy.from_context(self.context)
+        normalized_text, voice = policy.select(
+            program_id=program_id,
+            daypart=self._voice_daypart(),
+            announcement_label=announcement_label,
+            text=text,
+        )
+        request = SynthesisRequest(
+            request_id=str(uuid4()),
+            station_id=self.context.profile.station_id,
+            language=self.context.profile.language,
+            locale=self.context.profile.locale,
+            normalized_text=normalized_text,
+            announcement_label=announcement_label,
+            voice=voice,
+        )
+        return self.tts.synthesize_request(request, str(output_path)).output_path
+
+    def _voice_daypart(self) -> str:
+        now = datetime.now(ZoneInfo(self.context.profile.timezone))
+        if now.weekday() >= 5:
+            return "weekend"
+        if 5 <= now.hour < 12:
+            return "morning"
+        if 12 <= now.hour < 20:
+            return "daytime"
+        return "night"
 
     def _program_voice(self, program: dict | None) -> str | None:
         if not program:

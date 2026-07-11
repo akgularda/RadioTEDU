@@ -1,6 +1,7 @@
-from .dummy_tts import DummyTTSProvider
+"""Qwen-only typed text-to-speech interfaces."""
+
+from .base import TTSProvider
 from .factory import build_tts_provider
 from .qwen_tts import QwenTTSProvider
-from .sapi_tts import SapiTTSProvider
 
-__all__ = ["DummyTTSProvider", "QwenTTSProvider", "SapiTTSProvider", "build_tts_provider"]
+__all__ = ["QwenTTSProvider", "TTSProvider", "build_tts_provider"]

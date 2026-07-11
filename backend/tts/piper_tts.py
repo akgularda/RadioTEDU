@@ -1,3 +1,5 @@
+"""Legacy test utility; production speech must never import this module."""
+
 from __future__ import annotations
 
 from .qwen_tts import QwenTTSProvider

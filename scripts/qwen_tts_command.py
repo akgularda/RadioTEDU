@@ -1,45 +1,63 @@
+"""Submit one trusted, policy-selected request to the local Qwen service."""
+
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
-import urllib.request
 from pathlib import Path
+from uuid import uuid4
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from backend.config import Settings
+from backend.stations.context import coerce_station_context
+from backend.tts.contracts import SynthesisRequest
+from backend.tts.factory import build_tts_provider
+from backend.tts.voice_policy import VoicePolicy
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="RadioTEDU Qwen TTS command wrapper.")
-    parser.add_argument("--text", required=True)
-    parser.add_argument("--out", "--output_path", dest="output_path", required=True)
-    parser.add_argument("--voice", default="")
-    return parser.parse_args(argv)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate one Qwen-only RadioTEDU WAV clip.")
+    parser.add_argument("text")
+    parser.add_argument("output_path", type=Path)
+    parser.add_argument("--program-id", default="manual")
+    parser.add_argument("--daypart", choices=("morning", "daytime", "night", "weekend"), default="daytime")
+    parser.add_argument(
+        "--announcement-label",
+        choices=(
+            "station_id", "track_intro", "track_outro", "weather", "news",
+            "listener_reply", "program_open", "program_close",
+        ),
+        default="station_id",
+    )
+    parser.add_argument("--voice-config-root", type=Path, default=Path("config/voices"))
+    parser.add_argument("--service-url", default=os.environ.get("QWEN_TTS_SERVICE_URL", "http://127.0.0.1:8090"))
+    return parser.parse_args()
 
 
-def synthesize_via_http(text: str, output_path: Path, voice: str, url: str) -> None:
-    payload = json.dumps({"text": text, "voice": voice, "output_format": "wav"}).encode("utf-8")
-    request = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(request, timeout=120) as response:
-        data = response.read()
-    if not data.startswith(b"RIFF"):
-        raise RuntimeError("Qwen TTS endpoint did not return WAV bytes")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(data)
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv or sys.argv[1:])
-    output_path = Path(args.output_path)
-    endpoint = os.environ.get("QWEN_TTS_HTTP_URL", "").strip()
-    if not endpoint:
-        print("QWEN_TTS_HTTP_URL is not configured; falling back to local provider.", file=sys.stderr)
-        return 2
-    try:
-        synthesize_via_http(args.text, output_path, args.voice, endpoint)
-    except Exception as exc:
-        print(f"Qwen TTS failed: {exc}", file=sys.stderr)
-        return 1
-    output_path.with_suffix(".txt").write_text(args.text, encoding="utf-8")
+def main() -> int:
+    args = parse_args()
+    context = coerce_station_context(Settings.from_env())
+    normalized, voice = VoicePolicy.from_context(context, args.voice_config_root).select(
+        program_id=args.program_id,
+        daypart=args.daypart,
+        announcement_label=args.announcement_label,
+        text=args.text,
+    )
+    request = SynthesisRequest(
+        request_id=str(uuid4()),
+        station_id=context.profile.station_id,
+        language=context.profile.language,
+        locale=context.profile.locale,
+        normalized_text=normalized,
+        announcement_label=args.announcement_label,
+        voice=voice,
+    )
+    result = build_tts_provider(context, args.service_url).synthesize_request(request, str(args.output_path))
+    print(result.output_path)
     return 0
 
 

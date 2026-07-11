@@ -1,55 +1,116 @@
+"""Strict HTTP client for the local persistent Qwen service."""
+
 from __future__ import annotations
 
-import subprocess
+import hashlib
+import json
+import os
+import wave
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from .dummy_tts import DummyTTSProvider
+import httpx
+
+from backend.stations.context import StationContext
+
+from .contracts import QwenUnavailableError, SynthesisRequest, SynthesisResult, cache_identity_payload
 
 
 class QwenTTSProvider:
-    def __init__(self, command_template: str = "", fallback=None) -> None:
-        self.command_template = command_template.strip()
-        self.fallback = fallback or DummyTTSProvider()
-        self.provider_name = "qwen" if self.command_template else self.fallback.provider_name
+    provider_name = "qwen"
+
+    def __init__(
+        self,
+        context: StationContext,
+        service_url: str,
+        timeout_seconds: float = 45.0,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        parsed = urlsplit(service_url)
+        if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("Qwen service URL must use loopback HTTP")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Qwen service URL must be a plain loopback endpoint")
+        self.context = context
+        self.service_url = service_url.rstrip("/")
+        self.client = httpx.Client(timeout=timeout_seconds, transport=transport)
         self.last_error: str | None = None
 
-    def synthesize(self, text: str, output_path: str, voice: str | None = None) -> str:
-        if not self.command_template:
-            return self.fallback.synthesize(text, output_path, voice)
-        path = Path(output_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        command = self.command_template.format(
-            text=_shell_arg(text),
-            output_path=_shell_arg(str(path)),
-            voice=_shell_arg(voice or ""),
-        )
+    def synthesize_request(self, request: SynthesisRequest, output_path: str) -> SynthesisResult:
+        profile = self.context.profile
+        if (
+            request.station_id != profile.station_id
+            or request.language != profile.language
+            or request.locale != profile.locale
+        ):
+            raise ValueError("synthesis request does not belong to provider station")
+
+        response: httpx.Response | None = None
+        for attempt in range(2):
+            try:
+                response = self.client.post(f"{self.service_url}/v1/synthesize", json=request.model_dump())
+                response.raise_for_status()
+                break
+            except (httpx.HTTPError, OSError) as exc:
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                if attempt == 1:
+                    raise QwenUnavailableError("Qwen synthesis failed after 2 attempts") from exc
+
+        assert response is not None
+        payload = response.content
+        digest = hashlib.sha256(payload).hexdigest()
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type != "audio/wav":
+            raise QwenUnavailableError("Qwen response must be audio/wav")
+        if response.headers.get("x-audio-sha256") != digest:
+            raise QwenUnavailableError("Qwen response checksum mismatch")
+        if response.headers.get("x-model-checksum") != request.voice.model_checksum:
+            raise QwenUnavailableError("Qwen response model checksum mismatch")
+
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f"{target.name}.partial")
+        temporary.write_bytes(payload)
         try:
-            subprocess.run(command, shell=True, check=True, timeout=45)
-        except Exception as exc:
-            self.last_error = str(exc)
-            self.provider_name = f"qwen->{self.fallback.provider_name}"
-            return self.fallback.synthesize(text, output_path, voice)
-        if not path.exists():
-            self.last_error = "command_completed_without_output"
-            self.provider_name = f"qwen->{self.fallback.provider_name}"
-            return self.fallback.synthesize(text, output_path, voice)
-        self.provider_name = "qwen"
+            with wave.open(str(temporary), "rb") as wav:
+                channels = wav.getnchannels()
+                rate = wav.getframerate()
+                frames = wav.getnframes()
+            if channels != 1 or frames == 0 or not 16000 <= rate <= 48000:
+                raise QwenUnavailableError("Qwen response must be non-empty mono broadcast WAV")
+            if response.headers.get("x-sample-rate-hz") != str(rate):
+                raise QwenUnavailableError("Qwen response sample-rate header mismatch")
+            os.replace(temporary, target)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+
+        identity = json.dumps(
+            cache_identity_payload(request), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
         self.last_error = None
-        path.with_suffix(".txt").write_text(text, encoding="utf-8")
-        return str(path)
+        return SynthesisResult(
+            request_id=request.request_id,
+            station_id=request.station_id,
+            output_path=str(target),
+            cache_key=hashlib.sha256(identity).hexdigest(),
+            audio_sha256=digest,
+            duration_seconds=frames / rate,
+            sample_rate_hz=rate,
+            channels=1,
+            source="qwen",
+        )
 
-    def health(self) -> dict:
-        configured = bool(self.command_template)
-        return {
-            "provider": "qwen",
-            "active_provider": self.provider_name,
-            "status": "ready" if configured and self.provider_name == "qwen" else ("fallback" if not configured or "->" in self.provider_name else "ready"),
-            "configured": configured,
-            "command_configured": configured,
-            "last_error": self.last_error,
-        }
-
-
-def _shell_arg(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    def health(self) -> dict[str, object]:
+        try:
+            response = self.client.get(f"{self.service_url}/health")
+            response.raise_for_status()
+            payload = response.json()
+            return {**payload, "provider": "qwen", "last_error": self.last_error or payload.get("last_error")}
+        except (httpx.HTTPError, ValueError) as exc:
+            return {
+                "provider": "qwen",
+                "status": "unhealthy",
+                "warmed": False,
+                "last_error": f"{type(exc).__name__}: {exc}",
+            }

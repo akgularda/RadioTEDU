@@ -6,6 +6,7 @@ import wave
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,7 @@ from backend.music_library import iter_audio_files, scan_music
 from backend.playback import QueueItem
 from backend.public_dashboard import PublicSnapshotPusher, public_snapshot_from_state
 from backend.tts.dummy_tts import DummyTTSProvider
+from backend.tts.factory import build_tts_provider
 from backend.weather.open_meteo import OpenMeteoWeatherProvider
 
 
@@ -28,6 +30,17 @@ def make_wav(path: Path) -> None:
         wav.setsampwidth(2)
         wav.setframerate(8000)
         wav.writeframes(b"\x00\x00" * 800)
+
+
+def use_test_qwen_synthesis(agent) -> None:
+    """Keep non-TTS core tests isolated from model assets and local HTTP."""
+
+    def synthesize(text, output_path, **kwargs) -> str:
+        del text, kwargs
+        make_wav(Path(output_path))
+        return str(output_path)
+
+    agent._synthesize_qwen = synthesize
 
 
 class RadioTEDUCoreTests(unittest.TestCase):
@@ -276,6 +289,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
             from backend.radio_agent import RadioAgent
 
             agent = RadioAgent(settings)
+            use_test_qwen_synthesis(agent)
             readiness = agent.ensure_announcement_prebuffer("night_lab")
             self.assertTrue(readiness["ready_to_broadcast"])
             with connect(settings) as conn:
@@ -318,6 +332,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
             from backend.radio_agent import RadioAgent
 
             agent = RadioAgent(settings)
+            use_test_qwen_synthesis(agent)
             readiness = agent.ensure_announcement_prebuffer("night_lab")
 
             self.assertTrue(readiness["ready_to_broadcast"])
@@ -739,28 +754,26 @@ class RadioTEDUCoreTests(unittest.TestCase):
             self.assertTrue(output.exists())
             self.assertEqual("A short RadioTEDU line.", output.with_suffix(".txt").read_text(encoding="utf-8"))
 
-    def test_qwen_tts_health_reports_missing_command_and_test_endpoint_uses_program_voice(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            settings = self.make_settings(root)
-            settings.tts_provider = "qwen"
-            settings.qwen_tts_command = ""
-            app = create_app(settings)
-            client = TestClient(app)
+    def test_tts_factory_is_qwen_only_and_production_does_not_route_legacy_speech(self) -> None:
+        station_context = SimpleNamespace(
+            profile=SimpleNamespace(station_id="radiotedu-en", language="en", locale="en-US")
+        )
+        provider = build_tts_provider(station_context, "http://127.0.0.1:8090")
+        self.assertEqual("qwen", provider.provider_name)
+        self.assertFalse(hasattr(provider, "fallback"))
 
-            status = client.get("/api/status").json()
-            self.assertEqual("fallback", status["health"]["tts_runtime"]["status"])
-            self.assertEqual("dummy", status["health"]["tts_runtime"]["active_provider"])
-
-            response = client.post("/api/tts/test", json={"program_id": "night_lab"})
-            payload = response.json()
-
-            self.assertEqual(200, response.status_code)
-            self.assertTrue(payload["ok"])
-            self.assertEqual("tr_female_cool", payload["voice"])
-            self.assertEqual("dummy", payload["provider"])
-            self.assertTrue(Path(payload["file_path"]).exists())
-            self.assertIn("Selin", Path(payload["file_path"]).with_suffix(".txt").read_text(encoding="utf-8"))
+        root = Path(__file__).resolve().parents[2]
+        production = "\n".join(
+            (root / path).read_text(encoding="utf-8")
+            for path in (
+                "backend/tts/__init__.py",
+                "backend/tts/factory.py",
+                "backend/tts/qwen_tts.py",
+                "backend/tts/qwen_service.py",
+            )
+        )
+        for forbidden in ("SapiTTSProvider", "PiperTTSProvider", "DummyTTSProvider"):
+            self.assertNotIn(forbidden, production)
 
     def test_maintenance_cleanup_removes_old_generated_clips_and_bounds_logs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -912,6 +925,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
                     return WeatherContext(True, "Ankara", "Ankara: 18 C, Overcast, wind 8 km/h.", temperature_c=18, wind_kmh=8, condition="Overcast")
 
             agent = RadioAgent(settings)
+            use_test_qwen_synthesis(agent)
             agent.weather_provider = FixedWeatherProvider()
             readiness = agent.ensure_announcement_prebuffer("night_lab")
 
@@ -940,6 +954,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
                     return WeatherContext(False, "Ankara", "No weather data.", source="unconfigured")
 
             agent = RadioAgent(settings)
+            use_test_qwen_synthesis(agent)
             agent.weather_provider = MissingWeatherProvider()
             readiness = agent.ensure_announcement_prebuffer("night_lab")
 
@@ -961,6 +976,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
             from backend.radio_agent import RadioAgent
 
             agent = RadioAgent(settings)
+            use_test_qwen_synthesis(agent)
             agent._web_context = lambda _query: [
                 {
                     "title": "Blue Room by Alice source note",
@@ -990,6 +1006,7 @@ class RadioTEDUCoreTests(unittest.TestCase):
             from backend.radio_agent import RadioAgent
 
             agent = RadioAgent(settings)
+            use_test_qwen_synthesis(agent)
             agent._web_context = lambda _query: []
             readiness = agent.ensure_announcement_prebuffer("night_lab")
 

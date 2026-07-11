@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from backend.config import Settings, ensure_runtime_dirs
 from backend.database import connect, init_db
 from backend.liquidsoap import liquidsoap_status
 from backend.ollama_setup import check_ollama_setup
+from backend.stations.context import coerce_station_context
 from backend.tts import build_tts_provider
 
 
@@ -34,7 +36,10 @@ def build_report(settings: Settings) -> dict:
     ollama = check_ollama_setup(settings)
     stream = liquidsoap_status(settings)
     public_sync_url = settings.public_sync_url
-    tts = build_tts_provider(settings).health()
+    tts = build_tts_provider(
+        coerce_station_context(settings),
+        os.environ.get("QWEN_TTS_SERVICE_URL", "http://127.0.0.1:8090"),
+    ).health()
     music_library = {
         "path_configured": bool(settings.music_dir),
         "track_count": _track_count(settings),
