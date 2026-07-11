@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .audio.processing import ProcessingProfile
 from .config import Settings
 
 
@@ -15,7 +16,10 @@ def liquidsoap_pid_path(settings: Settings) -> Path:
     return Path(settings.liquidsoap_script_path).with_suffix(".pid")
 
 
-def render_liquidsoap_config(settings: Settings) -> dict:
+def render_liquidsoap_config(
+    settings: Settings, processing_profile: ProcessingProfile | None = None
+) -> dict:
+    processing_profile = processing_profile or ProcessingProfile()
     queue_path = Path(settings.liquidsoap_queue_path)
     script_path = Path(settings.liquidsoap_script_path)
     queue_path.parent.mkdir(parents=True, exist_ok=True)
@@ -30,6 +34,23 @@ set("server.telnet", false)
 radio = playlist(id="RadioTEDU", mode="normal", reload=1, reload_mode="watch", "{queue_path.as_posix()}")
 radio = mksafe(radio)
 
+# input level control
+radio = amplify({processing_profile.input_gain_factor:.6f}, radio)
+
+# gentle wideband AGC
+radio = normalize(target={processing_profile.target_lufs:.1f}, lufs=true, gain_min=-{processing_profile.wideband_agc_max_gain_db:.1f}, gain_max={processing_profile.wideband_agc_max_gain_db:.1f}, radio)
+
+# restrained multiband dynamics
+radio = compress.multiband(radio, [
+  {{frequency=250., attack=25., release=250., ratio={processing_profile.multiband_ratio:.1f}, threshold=-18., gain=0.}},
+  {{frequency=2500., attack=20., release=200., ratio={processing_profile.multiband_ratio:.1f}, threshold=-16., gain=0.}},
+  {{frequency=12000., attack=15., release=150., ratio={processing_profile.multiband_ratio:.1f}, threshold=-14., gain=0.}}
+])
+
+# final true-peak limiter
+radio = limit(threshold={processing_profile.true_peak_ceiling_dbtp:.1f}, radio)
+
+# encoder
 output.icecast(
   %mp3,
   host="{settings.liquidsoap_host}",
@@ -48,6 +69,7 @@ output.icecast(
         "script_path": str(script_path),
         "mount": mount,
         "icecast_url": f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{mount}",
+        "processing_profile": processing_profile.name,
     }
 
 

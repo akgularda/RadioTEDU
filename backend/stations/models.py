@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from ..audio.processing import ProcessingProfile
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +20,7 @@ class AudioProfile:
     loudness_lufs: int
     true_peak_dbtp: int
     minimum_qwen_buffer: int
+    processing: ProcessingProfile = field(default_factory=ProcessingProfile)
 
 
 @dataclass(frozen=True, slots=True)
