@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .audio.models import BROADCAST_AUDIO_POLICY
 from .audio.processing import ProcessingProfile
 from .config import Settings
 
@@ -27,12 +28,57 @@ def render_liquidsoap_config(
     if not queue_path.exists():
         queue_path.write_text("", encoding="utf-8")
     mount = settings.liquidsoap_mount if settings.liquidsoap_mount.startswith("/") else f"/{settings.liquidsoap_mount}"
+    playout = {
+        "silence_threshold_dbfs": BROADCAST_AUDIO_POLICY.silence_threshold_dbfs,
+        "degraded_primary_seconds": BROADCAST_AUDIO_POLICY.silence_degraded_primary_seconds,
+        "fallback_seconds": BROADCAST_AUDIO_POLICY.silence_fallback_seconds,
+        "talk_over_minimum_intro_confidence": BROADCAST_AUDIO_POLICY.talk_over_minimum_intro_confidence,
+        "talk_over_minimum_instrumental_intro_seconds": BROADCAST_AUDIO_POLICY.talk_over_minimum_instrumental_intro_seconds,
+        "speech_end_before_intro_seconds": BROADCAST_AUDIO_POLICY.speech_target_before_intro_end_seconds,
+        "speech_end_before_intro_range_seconds": (
+            BROADCAST_AUDIO_POLICY.speech_target_before_intro_end_min_seconds,
+            BROADCAST_AUDIO_POLICY.speech_target_before_intro_end_max_seconds,
+        ),
+        "time_stretch_ratio": 1.0,
+        "speaks_over_vocals": False,
+    }
     script = f"""# RadioTEDU Liquidsoap configuration
 set("log.stdout", true)
 set("server.telnet", false)
 
 radio = playlist(id="RadioTEDU", mode="normal", reload=1, reload_mode="watch", "{queue_path.as_posix()}")
 radio = mksafe(radio)
+
+# Measured playout guards: T17 transition decisions are cue-aware.  Generic
+# crossfades remain zero-length unless a decision supplies liq_cross_duration,
+# so speech, jingles, and unverified intros stay sequential.
+radio = crossfade(
+  duration=0.0,
+  fade_in=0.0,
+  fade_out=0.0,
+  smart=true,
+  conservative=true,
+  assume_autocue=true,
+  radio
+)
+
+# A continuous source below -60 dBFS is degraded after 1.0 second and skipped
+# at 1.5 seconds, allowing the next queued music/fallback item to take over.
+radio = blank.detect(
+  max_blank=1.0,
+  min_noise=0.05,
+  threshold=-60.0,
+  track_sensitive=false,
+  fun () -> log("RadioTEDU primary source degraded after 1.0s below -60 dBFS"),
+  radio
+)
+radio = blank.skip(
+  threshold=-60.0,
+  max_blank=1.5,
+  min_noise=0.05,
+  track_sensitive=false,
+  radio
+)
 
 # input level control
 radio = amplify({processing_profile.input_gain_factor:.6f}, radio)
@@ -70,6 +116,7 @@ output.icecast(
         "mount": mount,
         "icecast_url": f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{mount}",
         "processing_profile": processing_profile.name,
+        "playout": playout,
     }
 
 
