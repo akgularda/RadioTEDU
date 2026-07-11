@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import wave
 from pathlib import Path
 
@@ -110,6 +112,59 @@ def test_open_rejects_unsafe_manifest_paths(tmp_path: Path) -> None:
     manifest_path = release_root / "media" / "imaging" / "radiotedu-en" / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["assets"][0]["relative_path"] = "../radiotedu-fr/assets/escape.wav"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ImagingManifestError, match="unsafe asset path"):
+        ImagingLibrary.open(release_root, "radiotedu-en")
+
+
+def test_packaged_bilingual_imaging_is_release_relative_and_downloads_independent(
+    tmp_path: Path,
+) -> None:
+    packaged_release = Path(__file__).resolve().parents[2] / "packaging" / "imaging"
+    assert packaged_release.is_dir()
+
+    release_root = tmp_path / "release"
+    shutil.copytree(packaged_release, release_root)
+    assert not (release_root / "Downloads").exists()
+
+    expected_station_assets = {"radiotedu-en": 24, "radiotedu-fr": 12}
+    for station_id, expected_count in expected_station_assets.items():
+        manifest_path = release_root / "media" / "imaging" / station_id / "manifest.json"
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+        manifest = json.loads(manifest_text)
+        library = ImagingLibrary.open(release_root, station_id)
+
+        assert manifest["station_id"] == station_id
+        assert "Downloads" not in manifest_text
+        assert len(library.assets) == expected_count
+        for asset, asset_path in zip(library.assets, library.asset_paths(), strict=True):
+            assert asset.language == station_id.rsplit("-", maxsplit=1)[1]
+            assert asset.category == "jingle"
+            assert asset.relative_path.as_posix().startswith("assets/")
+            assert release_root in asset_path.parents
+            assert "Downloads" not in asset_path.parts
+            assert hashlib.sha256(asset_path.read_bytes()).hexdigest() == asset.checksum_sha256
+
+
+@pytest.mark.parametrize(
+    "unsafe_source_path",
+    (
+        "Downloads/jingle/generated_jingles/station-id.mp3",
+        "C:/Users/akgul/Downloads/jingle/generated_jingles/station-id.mp3",
+    ),
+)
+def test_packaged_manifest_rejects_downloads_source_paths(
+    tmp_path: Path, unsafe_source_path: str
+) -> None:
+    packaged_release = Path(__file__).resolve().parents[2] / "packaging" / "imaging"
+    assert packaged_release.is_dir()
+
+    release_root = tmp_path / "release"
+    shutil.copytree(packaged_release, release_root)
+    manifest_path = release_root / "media" / "imaging" / "radiotedu-en" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"][0]["relative_path"] = unsafe_source_path
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(ImagingManifestError, match="unsafe asset path"):

@@ -1,0 +1,102 @@
+{
+  "assets": [
+    {
+      "category": "jingle",
+      "checksum_sha256": "0039132553953293681d436f36aeb1bf7467f29aee9f37733d8810f7c0aef8c5",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/0039132553953293681d436f36aeb1bf7467f29aee9f37733d8810f7c0aef8c5.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "04c497d84abed692fc06f06602617c743741f9ef966a0060a64545e0e54bb488",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/04c497d84abed692fc06f06602617c743741f9ef966a0060a64545e0e54bb488.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "1d7bf890035199cf064e2697a188c26b44e402edcbfc8a3af9c76f264b60afa2",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/1d7bf890035199cf064e2697a188c26b44e402edcbfc8a3af9c76f264b60afa2.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "4ef2839ed2e8701fcce8b06be1f72d51ec88e6ebce3b9523a77f1b2cc7090598",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/4ef2839ed2e8701fcce8b06be1f72d51ec88e6ebce3b9523a77f1b2cc7090598.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "4f933eee1bdcdd42ec74498471ae2be806d05428fa6a191fd54b30fc8046aedd",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/4f933eee1bdcdd42ec74498471ae2be806d05428fa6a191fd54b30fc8046aedd.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "654a678a0be1ba7b5537014908e408d9f18e12c77a13060ea760a294669b037d",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/654a678a0be1ba7b5537014908e408d9f18e12c77a13060ea760a294669b037d.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "75dbb88cc294b8d8df8e69a10078ae105c52912886909ab216781784a8011d33",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/75dbb88cc294b8d8df8e69a10078ae105c52912886909ab216781784a8011d33.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "7acf5feea0a1b26a211b57656f1b9d6427e444dddfc757fb19b0e85506f67022",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/7acf5feea0a1b26a211b57656f1b9d6427e444dddfc757fb19b0e85506f67022.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "aa48af5a13d13c5b9a82ca887700ecfd6a3449605a526c3d29525687354c7dd4",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/aa48af5a13d13c5b9a82ca887700ecfd6a3449605a526c3d29525687354c7dd4.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "d01ba9c14143ec8b5c944a102031f2f127cd128a9f7864c239a955a63339793c",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/d01ba9c14143ec8b5c944a102031f2f127cd128a9f7864c239a955a63339793c.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "e73dc787250fe05e3a800d5e9e1ee4f55f9bcc3fbc8238a49b84a19bc0686d75",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/e73dc787250fe05e3a800d5e9e1ee4f55f9bcc3fbc8238a49b84a19bc0686d75.mp3",
+      "station_id": "radiotedu-fr"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "ec8cbebae464fcd91ef67a7c022dd48e968430f02f039c1e2f141d0132224497",
+      "duration_seconds": 10.032,
+      "language": "fr",
+      "relative_path": "assets/ec8cbebae464fcd91ef67a7c022dd48e968430f02f039c1e2f141d0132224497.mp3",
+      "station_id": "radiotedu-fr"
+    }
+  ],
+  "schema_version": 1,
+  "station_id": "radiotedu-fr"
+}

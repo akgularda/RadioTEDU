@@ -1,0 +1,198 @@
+{
+  "assets": [
+    {
+      "category": "jingle",
+      "checksum_sha256": "0496706c1829db21b035a3d2b21c2dae661191a5ace22e232286330ceb535d4f",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/0496706c1829db21b035a3d2b21c2dae661191a5ace22e232286330ceb535d4f.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "23a1f35d66661d8d0d331f2a6d8ee06cbbd402287f35dd8291007ef6238b0f97",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/23a1f35d66661d8d0d331f2a6d8ee06cbbd402287f35dd8291007ef6238b0f97.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "3575e98ce29f997ece88b4c03ed73b366c04a05df4e632fd7867eaa28974dc0d",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/3575e98ce29f997ece88b4c03ed73b366c04a05df4e632fd7867eaa28974dc0d.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "3b4c69a759d8a3629007361978380b14ca1322c723257b49ed956c766ce57c68",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/3b4c69a759d8a3629007361978380b14ca1322c723257b49ed956c766ce57c68.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "41a70bd890f7ffd7a2f357ef0840c374ed69245b5d6fdeda8a49ec83cb76ede9",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/41a70bd890f7ffd7a2f357ef0840c374ed69245b5d6fdeda8a49ec83cb76ede9.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "784ca37b9426f8405fe1cdc13da749b6267fad7bf9a9b1a9461c059d42e53d88",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/784ca37b9426f8405fe1cdc13da749b6267fad7bf9a9b1a9461c059d42e53d88.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "81362308c41f9c4d247ea7b63876b60dd0757c9739ada888436ffb9a26061f53",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/81362308c41f9c4d247ea7b63876b60dd0757c9739ada888436ffb9a26061f53.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "87c137bc190953d00f4017e40bc1500ef799b8678e5ac9f939fa5516064fe6c7",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/87c137bc190953d00f4017e40bc1500ef799b8678e5ac9f939fa5516064fe6c7.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "8ec73a898b9bb751710638509fdf5d5e3a69747ad3f3aeb2c7518584a0205872",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/8ec73a898b9bb751710638509fdf5d5e3a69747ad3f3aeb2c7518584a0205872.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "a0b760f5223ecf7df85f5e37a7f87fc857dbb4eb09163130da512280aca1567d",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/a0b760f5223ecf7df85f5e37a7f87fc857dbb4eb09163130da512280aca1567d.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "a1e1bb1d028e2b00e18fb52f4be38b53b365cf984b9c7d778c36b1bdc850185c",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/a1e1bb1d028e2b00e18fb52f4be38b53b365cf984b9c7d778c36b1bdc850185c.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "a3260cabeaf698b8278739a10bfb162526d676a3293fe817b00d74f0331ddf56",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/a3260cabeaf698b8278739a10bfb162526d676a3293fe817b00d74f0331ddf56.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "a414d1de3a7a0476af1457d32737db32cfefc85ecd425e40cb536d4012b8803c",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/a414d1de3a7a0476af1457d32737db32cfefc85ecd425e40cb536d4012b8803c.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "b47308a6ded3d48dcbb02039833b0faffa6aeb79b8ebd807fd25d63cc1dcc452",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/b47308a6ded3d48dcbb02039833b0faffa6aeb79b8ebd807fd25d63cc1dcc452.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "bbeb5d64e8091102bef8779884a345e2974a1603ef567a5b4a6ecd4903ebc148",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/bbeb5d64e8091102bef8779884a345e2974a1603ef567a5b4a6ecd4903ebc148.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "c28256c9ecc8f876ae02cc65bd47a68a6dc48e13364af25a35b7856cab41cbd8",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/c28256c9ecc8f876ae02cc65bd47a68a6dc48e13364af25a35b7856cab41cbd8.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "d2806fd0541c9e535c312637868361f23c123f60f3a7985a36c9c564f14e55df",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/d2806fd0541c9e535c312637868361f23c123f60f3a7985a36c9c564f14e55df.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "d697727fdd54fd19249a392d0fa41e2a76a0eb211ffe46d33d13c66258c2240b",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/d697727fdd54fd19249a392d0fa41e2a76a0eb211ffe46d33d13c66258c2240b.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "d8d6f18d1569cbf7b7cef39a19d4886f2c13da2a512b7fd9f2f5f168a84bb4c6",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/d8d6f18d1569cbf7b7cef39a19d4886f2c13da2a512b7fd9f2f5f168a84bb4c6.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "dc287b2927264256dd1065039237d2978fd9a70459f6f7caf4fb41af4931e4f6",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/dc287b2927264256dd1065039237d2978fd9a70459f6f7caf4fb41af4931e4f6.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "dd27b5302a92ff9d2aa76f73c552bec04cef81c819585e2d7321b3dd64488575",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/dd27b5302a92ff9d2aa76f73c552bec04cef81c819585e2d7321b3dd64488575.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "f5510e3180075f2736008e5a3924ff1dfcde2535a4c7b85fa11b5647c9b2567d",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/f5510e3180075f2736008e5a3924ff1dfcde2535a4c7b85fa11b5647c9b2567d.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "fc6b0c9035b90eb68b0cd04f753360792fc3f04913923ff138af7b799af7b9e6",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/fc6b0c9035b90eb68b0cd04f753360792fc3f04913923ff138af7b799af7b9e6.mp3",
+      "station_id": "radiotedu-en"
+    },
+    {
+      "category": "jingle",
+      "checksum_sha256": "fdfef0474369cbce61998487a11bcb29ff43b534f5c58f027dfaef62d4eb1fd3",
+      "duration_seconds": 10.08,
+      "language": "en",
+      "relative_path": "assets/fdfef0474369cbce61998487a11bcb29ff43b534f5c58f027dfaef62d4eb1fd3.mp3",
+      "station_id": "radiotedu-en"
+    }
+  ],
+  "schema_version": 1,
+  "station_id": "radiotedu-en"
+}
