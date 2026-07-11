@@ -16,6 +16,16 @@ from backend.audio.models import (
     UnreadableAudioError,
     UnsupportedAudioFormatError,
 )
+from backend.config import Settings
+from backend.database import connect
+from backend.music_library import scan_music
+from backend.stations.context import StationContext, build_station_context
+from backend.stations.models import (
+    AudioProfile,
+    PublicProfile,
+    RuntimeProfile,
+    StationProfile,
+)
 
 
 def _write_wave(path: Path) -> None:
@@ -45,6 +55,59 @@ def _write_ffprobe_fixture(
         encoding="utf-8",
     )
     return (sys.executable, str(path))
+
+
+def _station_context(
+    station_id: str, station_root: Path, music_root: Path
+) -> StationContext:
+    data_root = station_root / "data"
+    database = data_root / "radio.db"
+    settings = Settings(
+        station_id=station_id,
+        database_path=str(database),
+        music_dir=str(music_root),
+    )
+    profile = StationProfile(
+        profile_version=1,
+        station_id=station_id,
+        display_name=station_id,
+        language="en" if station_id.endswith("-en") else "fr",
+        locale="en-US" if station_id.endswith("-en") else "fr-FR",
+        timezone="Europe/Istanbul",
+        public=PublicProfile(
+            route=f"/ai/{station_id}",
+            compatibility_routes=(),
+            snapshot_endpoint=f"/api/{station_id}/snapshot",
+            status_endpoint=f"/api/{station_id}/status",
+            stream_url=f"https://example.test/{station_id}",
+        ),
+        audio=AudioProfile(
+            stream_mount=f"/{station_id}",
+            loudness_lufs=-16,
+            true_peak_dbtp=-1,
+            minimum_qwen_buffer=5,
+        ),
+        runtime=RuntimeProfile(
+            data_root=str(data_root),
+            database=str(database),
+            music_root=str(music_root),
+            announcement_root=str(data_root / "announcements"),
+            cache_root=str(data_root / "cache"),
+            log_root=str(data_root / "logs"),
+        ),
+        voice_pack=f"{station_id}-voices",
+        snapshot_secret_ref=f"{station_id}-secret",
+    )
+    return build_station_context(settings, profile)
+
+
+def _catalog_rows(context: StationContext) -> list[tuple[object, ...]]:
+    with connect(context) as conn:
+        rows = conn.execute(
+            "select id, title, artist, duration_seconds, file_path "
+            "from tracks order by file_path"
+        ).fetchall()
+    return [tuple(row) for row in rows]
 
 
 def test_broadcast_audio_policy_freezes_professional_qualification_inputs() -> None:
@@ -123,3 +186,59 @@ def test_analyze_audio_rejects_unsupported_file_type(tmp_path: Path) -> None:
 
     with pytest.raises(UnsupportedAudioFormatError):
         analyze_audio(source)
+
+
+def test_scan_music_persists_validated_station_catalogs_without_cross_station_leaks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    en_music_root = tmp_path / "media" / "stations" / "radiotedu-en" / "music"
+    fr_music_root = tmp_path / "media" / "stations" / "radiotedu-fr" / "music"
+    en_music_root.mkdir(parents=True)
+    fr_music_root.mkdir(parents=True)
+    en_song = en_music_root / "English Artist - English Song.wav"
+    en_broken = en_music_root / "broken.wav"
+    fr_song = fr_music_root / "French Artist - French Song.wav"
+    _write_wave(en_song)
+    _write_wave(fr_song)
+    en_broken.write_bytes(b"not a wave file")
+    original_en_song = en_song.read_bytes()
+    original_en_broken = en_broken.read_bytes()
+
+    en_context = _station_context("radiotedu-en", tmp_path / "radiotedu-en", en_music_root)
+    fr_context = _station_context("radiotedu-fr", tmp_path / "radiotedu-fr", fr_music_root)
+
+    en_first_scan = scan_music(en_context)
+    fr_first_scan = scan_music(fr_context)
+
+    assert en_first_scan.tracks_found == 2
+    assert en_first_scan.tracks_indexed == 1
+    assert en_first_scan.music_dir == str(en_music_root)
+    assert fr_first_scan.tracks_found == 1
+    assert fr_first_scan.tracks_indexed == 1
+    assert _catalog_rows(en_context) == [
+        (1, "English Song", "English Artist", pytest.approx(0.1), str(en_song.resolve()))
+    ]
+    assert _catalog_rows(fr_context) == [
+        (1, "French Song", "French Artist", pytest.approx(0.1), str(fr_song.resolve()))
+    ]
+    assert en_song.read_bytes() == original_en_song
+    assert en_broken.read_bytes() == original_en_broken
+
+    en_second_scan = scan_music(en_context)
+
+    assert en_second_scan.tracks_found == 2
+    assert en_second_scan.tracks_indexed == 1
+    assert _catalog_rows(en_context) == [
+        (1, "English Song", "English Artist", pytest.approx(0.1), str(en_song.resolve()))
+    ]
+
+    en_song.unlink()
+    en_stale_scan = scan_music(en_context)
+
+    assert en_stale_scan.tracks_found == 1
+    assert en_stale_scan.tracks_indexed == 0
+    assert _catalog_rows(en_context) == []
+    assert _catalog_rows(fr_context) == [
+        (1, "French Song", "French Artist", pytest.approx(0.1), str(fr_song.resolve()))
+    ]

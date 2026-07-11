@@ -12,6 +12,9 @@ except Exception:  # pragma: no cover - exercised when mutagen is absent
 
 from .config import Settings
 from .database import connect, init_db, log_event, now_iso
+from .audio.catalog_analyzer import analyze_audio
+from .audio.models import AudioAnalysisError, AudioAnalyzerUnavailableError
+from .stations.context import StationContext
 
 
 AUDIO_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
@@ -25,10 +28,12 @@ class ScanResult:
 
 
 def iter_audio_files(root: Path, limit: int | None = None) -> Iterator[Path]:
-    if not root.exists():
+    root = root.resolve()
+    if not root.is_dir():
         return
     count = 0
     stack = [root]
+    visited = {root}
     while stack:
         current = stack.pop()
         try:
@@ -36,12 +41,22 @@ def iter_audio_files(root: Path, limit: int | None = None) -> Iterator[Path]:
         except OSError:
             continue
         for entry in entries:
+            try:
+                resolved_entry = entry.resolve()
+            except OSError:
+                continue
+            if not _is_within_root(resolved_entry, root):
+                continue
             if entry.is_dir():
-                stack.append(entry)
+                if resolved_entry not in visited:
+                    visited.add(resolved_entry)
+                    stack.append(resolved_entry)
                 continue
             if entry.suffix.lower() not in AUDIO_EXTENSIONS:
                 continue
-            yield entry
+            if not entry.is_file():
+                continue
+            yield resolved_entry
             count += 1
             if limit is not None and count >= limit:
                 return
@@ -104,16 +119,27 @@ def read_metadata(path: Path) -> dict:
     }
 
 
-def scan_music(settings: Settings) -> ScanResult:
-    init_db(settings)
-    music_root = Path(settings.music_dir)
+def scan_music(runtime: Settings | StationContext) -> ScanResult:
+    """Persist only analyzer-validated assets beneath the configured music root."""
+
+    music_root = _music_root(runtime)
+    init_db(runtime)
     found = 0
     indexed = 0
     timestamp = now_iso()
-    with connect(settings) as conn:
+    with connect(runtime) as conn:
         for audio_path in iter_audio_files(music_root):
             found += 1
+            try:
+                analysis = analyze_audio(audio_path)
+            except AudioAnalyzerUnavailableError:
+                continue
+            except AudioAnalysisError:
+                conn.execute("delete from tracks where file_path = ?", (str(audio_path),))
+                continue
             metadata = read_metadata(audio_path)
+            metadata["duration_seconds"] = analysis.duration_seconds
+            metadata["file_path"] = str(analysis.source_path)
             conn.execute(
                 """
                 insert into tracks (
@@ -148,8 +174,34 @@ def scan_music(settings: Settings) -> ScanResult:
             indexed += 1
             if indexed % 250 == 0:
                 conn.commit()
+        _remove_missing_station_tracks(conn, music_root)
         log_event(conn, "info", f"Music scan complete: {found} tracks found.", {"music_dir": str(music_root)})
         if found == 0:
             log_event(conn, "info", "Radio loop not started because no playable tracks exist.")
         conn.commit()
     return ScanResult(tracks_found=found, tracks_indexed=indexed, music_dir=str(music_root))
+
+
+def _music_root(runtime: Settings | StationContext) -> Path:
+    if isinstance(runtime, StationContext):
+        return runtime.music_root
+    return Path(runtime.music_dir)
+
+
+def _remove_missing_station_tracks(conn, music_root: Path) -> None:
+    resolved_root = music_root.resolve()
+    if not resolved_root.is_dir():
+        return
+    rows = conn.execute("select file_path from tracks").fetchall()
+    for (file_path,) in rows:
+        candidate = Path(file_path).resolve()
+        if _is_within_root(candidate, resolved_root) and not candidate.is_file():
+            conn.execute("delete from tracks where file_path = ?", (str(candidate),))
+
+
+def _is_within_root(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
