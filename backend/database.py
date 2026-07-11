@@ -733,6 +733,33 @@ create index if not exists announcement_job_events_job_time_idx
 """
 
 
+AIRCHECK_REPORT_SCHEMA = """
+create table if not exists aircheck_reports (
+    report_id integer primary key,
+    station_id text not null,
+    window_start text not null,
+    window_end text not null,
+    file_relative_path text not null,
+    file_checksum text not null,
+    codec text not null,
+    bitrate_kbps integer not null,
+    channels integer not null,
+    loudness_lufs real not null,
+    true_peak_dbtp real not null,
+    silence_seconds real not null,
+    clipping_count integer not null,
+    transition_count integer not null,
+    result text not null,
+    analyzer_version text not null,
+    created_at text not null,
+    unique(station_id, window_start)
+);
+
+create index if not exists idx_aircheck_reports_station_window
+    on aircheck_reports(station_id, window_start);
+"""
+
+
 DEFAULT_MIGRATIONS = (
     Migration(
         1,
@@ -749,5 +776,12 @@ DEFAULT_MIGRATIONS = (
         ANNOUNCEMENT_JOB_SCHEMA,
         required_columns=_schema_column_requirements(ANNOUNCEMENT_JOB_SCHEMA),
         schema_contract=_schema_contract(ANNOUNCEMENT_JOB_SCHEMA),
+    ),
+    Migration(
+        3,
+        "create_aircheck_reports",
+        AIRCHECK_REPORT_SCHEMA,
+        required_columns=_schema_column_requirements(AIRCHECK_REPORT_SCHEMA),
+        schema_contract=_schema_contract(AIRCHECK_REPORT_SCHEMA),
     ),
 )
