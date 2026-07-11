@@ -552,10 +552,37 @@ def test_agent_and_orchestrator_database_and_schedule_calls_use_injected_context
         def synthesize(self, text, output_path, voice=None):
             return output_path
 
+        def synthesize_request(self, request, output_path):
+            return type("SynthesisResult", (), {"output_path": output_path})()
+
+    class StubVoicePolicy:
+        def __init__(self, context):
+            self.context = context
+
+        @classmethod
+        def from_context(cls, context):
+            return cls(context)
+
+        def select(self, *, text, **kwargs):
+            profile = self.context.profile
+            return text, {
+                "station_id": profile.station_id,
+                "language": profile.language,
+                "locale": profile.locale,
+                "voice_pack": profile.voice_pack,
+                "host_id": "test-host",
+                "style_id": "test_style",
+                "clone_prompt_path": "test/prompt",
+                "reference_audio_path": "test/audio",
+                "reference_transcript": "test transcript",
+                "model_checksum": "sha256:" + "0" * 64,
+            }
+
     monkeypatch.chdir(tmp_path)
     station = contexts(tmp_path)["radiotedu-fr"]
     monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
     monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda settings: StubTTS())
+    monkeypatch.setattr(radio_agent_module, "VoicePolicy", StubVoicePolicy)
     agent_connect = radio_agent_module.connect
     orchestrator_connect = orchestrator_module.connect
     agent_connect_calls: list[StationContext] = []
@@ -597,8 +624,36 @@ def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp
             self.settings = settings
 
     class StubTTS:
+        provider_name = "stub"
+
         def synthesize(self, text, output_path, voice=None):
             return output_path
+
+        def synthesize_request(self, request, output_path):
+            return type("SynthesisResult", (), {"output_path": output_path})()
+
+    class StubVoicePolicy:
+        def __init__(self, context):
+            self.context = context
+
+        @classmethod
+        def from_context(cls, context):
+            return cls(context)
+
+        def select(self, *, text, **kwargs):
+            profile = self.context.profile
+            return text, {
+                "station_id": profile.station_id,
+                "language": profile.language,
+                "locale": profile.locale,
+                "voice_pack": profile.voice_pack,
+                "host_id": "test-host",
+                "style_id": "test_style",
+                "clone_prompt_path": "test/prompt",
+                "reference_audio_path": "test/audio",
+                "reference_transcript": "test transcript",
+                "model_checksum": "sha256:" + "0" * 64,
+            }
 
     class StubResult:
         def __init__(self, row=None):
@@ -632,6 +687,7 @@ def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp
     schedule_calls = []
     monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
     monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda runtime: StubTTS())
+    monkeypatch.setattr(radio_agent_module, "VoicePolicy", StubVoicePolicy)
     monkeypatch.setattr(radio_agent_module, "init_db", initialized.append)
     monkeypatch.setattr(
         radio_agent_module,

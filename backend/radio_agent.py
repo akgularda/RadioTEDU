@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from uuid import uuid4
@@ -30,10 +29,7 @@ class RadioAgent:
         )
         init_db(self._database_runtime)
         self.playback = PlaybackController(self.settings)
-        self.tts = build_tts_provider(
-            self.context,
-            os.environ.get("QWEN_TTS_SERVICE_URL", "http://127.0.0.1:8090"),
-        )
+        self.tts = build_tts_provider(self.context)
         self.last_search_at: datetime | None = None
         self.weather_provider = OpenMeteoWeatherProvider(self.settings)
         self.last_weather_at: datetime | None = None
