@@ -4,6 +4,7 @@ import hashlib
 import json
 import sys
 import wave
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from backend.audio.models import (
 from backend.config import Settings
 from backend.database import connect
 from backend.music_library import scan_music
+from backend.programming.separation import PlayedTrack, SeparationPolicy, TrackCandidate
 from backend.stations.context import StationContext, build_station_context
 from backend.stations.models import (
     AudioProfile,
@@ -242,3 +244,48 @@ def test_scan_music_persists_validated_station_catalogs_without_cross_station_le
     assert _catalog_rows(fr_context) == [
         (1, "French Song", "French Artist", pytest.approx(0.1), str(fr_song.resolve()))
     ]
+
+
+def test_station_separation_rejects_local_title_artist_album_and_track_cooldowns() -> None:
+    now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+    policy = SeparationPolicy(
+        title_cooldown=timedelta(hours=3),
+        artist_cooldown=timedelta(hours=2),
+        album_cooldown=timedelta(hours=4),
+        track_cooldown=timedelta(hours=5),
+    )
+    candidates = (
+        TrackCandidate("radiotedu-en", "title", "Shared Title", "New Artist", "New Album"),
+        TrackCandidate("radiotedu-en", "artist", "New Title", "Shared Artist", "New Album"),
+        TrackCandidate("radiotedu-en", "album", "New Title", "New Artist", "Shared Album"),
+        TrackCandidate("radiotedu-en", "track", "New Title", "New Artist", "New Album"),
+        TrackCandidate("radiotedu-en", "z-eligible", "Clear Z", "Clear Artist", "Clear Album"),
+        TrackCandidate("radiotedu-en", "a-eligible", "Clear A", "Clear Artist", "Clear Album"),
+    )
+    local_history = (
+        PlayedTrack("radiotedu-en", "old-title", "Shared Title", "Other", "Other", now - timedelta(hours=1)),
+        PlayedTrack("radiotedu-en", "old-artist", "Other", "Shared Artist", "Other", now - timedelta(hours=1)),
+        PlayedTrack("radiotedu-en", "old-album", "Other", "Other", "Shared Album", now - timedelta(hours=1)),
+        PlayedTrack("radiotedu-en", "track", "Other", "Other", "Other", now - timedelta(hours=1)),
+        PlayedTrack("radiotedu-fr", "a-eligible", "Clear A", "Clear Artist", "Clear Album", now - timedelta(minutes=1)),
+    )
+
+    selected = policy.select("radiotedu-en", candidates, local_history, now=now)
+
+    assert selected is not None
+    assert selected.track_id == "a-eligible"
+
+
+def test_station_separation_returns_none_when_only_track_is_on_cooldown() -> None:
+    now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+    candidate = TrackCandidate("radiotedu-en", "track-1", "Title", "Artist", "Album")
+    policy = SeparationPolicy(track_cooldown=timedelta(minutes=30))
+
+    selected = policy.select(
+        "radiotedu-en",
+        (candidate,),
+        (PlayedTrack("radiotedu-en", "track-1", "Title", "Artist", "Album", now - timedelta(minutes=1)),),
+        now=now,
+    )
+
+    assert selected is None

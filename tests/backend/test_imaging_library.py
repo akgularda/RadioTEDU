@@ -4,16 +4,20 @@ import hashlib
 import json
 import shutil
 import wave
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 
 import pytest
 
 from backend.imaging.library import (
+    ImagingAsset,
     ImagingImportError,
     ImagingLibrary,
     ImagingManifestError,
     import_imaging,
 )
+from backend.programming.rotation import ImagingPlay, ImagingRotationPolicy
 
 
 def _write_wave(path: Path) -> bytes:
@@ -169,3 +173,58 @@ def test_packaged_manifest_rejects_downloads_source_paths(
 
     with pytest.raises(ImagingManifestError, match="unsafe asset path"):
         ImagingLibrary.open(release_root, "radiotedu-en")
+
+
+def test_imaging_rotation_cycles_categories_and_deduplicates_recent_hashes() -> None:
+    now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+    repeated_checksum = "a" * 64
+    eligible_checksum = "b" * 64
+    promo_checksum = "c" * 64
+    policy = ImagingRotationPolicy(
+        category_order=("jingle", "program-promo"),
+        asset_reuse_windows={"jingle": timedelta(minutes=90), "program-promo": timedelta(hours=3)},
+    )
+    assets = (
+        ImagingAsset("radiotedu-en", "en", "jingle", 1.0, repeated_checksum, PurePosixPath("assets/duplicate-a.wav")),
+        ImagingAsset("radiotedu-en", "en", "jingle", 1.0, repeated_checksum, PurePosixPath("assets/duplicate-b.wav")),
+        ImagingAsset("radiotedu-en", "en", "jingle", 1.0, eligible_checksum, PurePosixPath("assets/eligible.wav")),
+        ImagingAsset("radiotedu-en", "en", "program-promo", 5.0, promo_checksum, PurePosixPath("assets/promo.wav")),
+    )
+    history = (
+        ImagingPlay("radiotedu-en", "program-promo", "d" * 64, now - timedelta(minutes=5)),
+        ImagingPlay("radiotedu-en", "jingle", repeated_checksum, now - timedelta(minutes=10)),
+    )
+
+    selected = policy.select("radiotedu-en", assets, history, now=now)
+
+    assert selected is not None
+    assert selected.category == "jingle"
+    assert selected.checksum_sha256 == eligible_checksum
+
+    next_selected = policy.select(
+        "radiotedu-en",
+        assets,
+        history + (ImagingPlay("radiotedu-en", "jingle", eligible_checksum, now),),
+        now=now + timedelta(minutes=1),
+    )
+
+    assert next_selected is not None
+    assert next_selected.category == "program-promo"
+    assert next_selected.checksum_sha256 == promo_checksum
+
+
+def test_imaging_rotation_returns_none_when_every_asset_is_reused_too_recently() -> None:
+    now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+    asset = ImagingAsset(
+        "radiotedu-en", "en", "jingle", 1.0, "e" * 64, PurePosixPath("assets/jingle.wav")
+    )
+    policy = ImagingRotationPolicy(asset_reuse_windows={"jingle": timedelta(minutes=90)})
+
+    selected = policy.select(
+        "radiotedu-en",
+        (asset,),
+        (ImagingPlay("radiotedu-en", "jingle", asset.checksum_sha256, now - timedelta(minutes=1)),),
+        now=now,
+    )
+
+    assert selected is None
