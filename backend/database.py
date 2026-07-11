@@ -7,6 +7,15 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 from .config import Settings, ensure_runtime_dirs
+from .stations.context import StationContext, coerce_station_context, ensure_station_runtime_dirs
+
+
+Runtime = Settings | StationContext
+DATABASE_CHANNEL_ID = "radiotedu"
+CHANNEL_DESCRIPTIONS = {
+    "en": "Local AI radio running on your machine.",
+    "fr": "Radio IA locale en français diffusée depuis votre ordinateur.",
+}
 
 
 PROGRAMS = [
@@ -74,8 +83,9 @@ def now_iso() -> str:
 
 
 @contextmanager
-def connect(settings: Settings):
-    conn = sqlite3.connect(settings.database_path)
+def connect(runtime: Runtime):
+    context = coerce_station_context(runtime)
+    conn = sqlite3.connect(context.database_file)
     conn.row_factory = sqlite3.Row
     conn.execute("pragma foreign_keys = on")
     try:
@@ -84,18 +94,22 @@ def connect(settings: Settings):
         conn.close()
 
 
-def init_db(settings: Settings) -> None:
-    ensure_runtime_dirs(settings)
-    with connect(settings) as conn:
+def init_db(runtime: Runtime) -> None:
+    context = coerce_station_context(runtime)
+    if isinstance(runtime, StationContext):
+        ensure_station_runtime_dirs(context)
+    else:
+        ensure_runtime_dirs(context.settings)
+    with connect(context) as conn:
         conn.executescript(SCHEMA)
         conn.execute("drop table if exists donations")
         migrate_program_columns(conn)
-        seed_channel(conn, settings)
-        seed_programs(conn)
+        seed_channel(conn, context)
+        seed_programs(conn, context)
         conn.commit()
 
 
-def seed_channel(conn: sqlite3.Connection, settings: Settings) -> None:
+def seed_channel(conn: sqlite3.Connection, context: StationContext) -> None:
     timestamp = now_iso()
     conn.execute(
         """
@@ -109,10 +123,10 @@ def seed_channel(conn: sqlite3.Connection, settings: Settings) -> None:
             updated_at=excluded.updated_at
         """,
         (
-            "radiotedu",
-            "RadioTEDU",
-            "Local AI radio running on your machine.",
-            settings.ollama_model,
+            DATABASE_CHANNEL_ID,
+            context.profile.display_name,
+            CHANNEL_DESCRIPTIONS[context.profile.language],
+            context.settings.ollama_model,
             "idle",
             "/static/generated/covers/radiotedu_station.png",
             timestamp,
@@ -121,7 +135,7 @@ def seed_channel(conn: sqlite3.Connection, settings: Settings) -> None:
     )
 
 
-def seed_programs(conn: sqlite3.Connection) -> None:
+def seed_programs(conn: sqlite3.Connection, context: StationContext) -> None:
     timestamp = now_iso()
     for program in PROGRAMS:
         conn.execute(
@@ -130,7 +144,7 @@ def seed_programs(conn: sqlite3.Connection) -> None:
                 id, channel_id, name, description, vibe, start_time, end_time,
                 days_of_week, cover_path, host_name, host_gender, voice, personality, active, created_at, updated_at
             )
-            values (?, 'radiotedu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             on conflict(id) do update set
                 name=excluded.name,
                 description=excluded.description,
@@ -148,6 +162,7 @@ def seed_programs(conn: sqlite3.Connection) -> None:
             """,
             (
                 program["id"],
+                DATABASE_CHANNEL_ID,
                 program["name"],
                 program["description"],
                 program["vibe"],

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .config import Settings
-from .database import connect, rows_to_dicts
-from .database import PROGRAMS
+from .database import DATABASE_CHANNEL_ID, PROGRAMS, connect, rows_to_dicts
+from .stations.context import StationContext, coerce_station_context
 
 
 DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
@@ -15,15 +16,17 @@ def _minutes(value: str) -> int:
     return int(hour) * 60 + int(minute)
 
 
-def _programs_from_db(settings: Settings) -> list[dict]:
-    with connect(settings) as conn:
+def _programs_from_db(runtime: Settings | StationContext) -> list[dict]:
+    context = coerce_station_context(runtime)
+    with connect(context) as conn:
         rows = conn.execute(
             """
             select id, name, description, vibe, start_time, end_time, days_of_week, cover_path, active
             from programs
-            where channel_id='radiotedu' and active=1
+            where channel_id=? and active=1
             order by start_time
-            """
+            """,
+            (DATABASE_CHANNEL_ID,),
         ).fetchall()
     return rows_to_dicts(rows)
 
@@ -38,17 +41,19 @@ def _matches(program: dict, day: str, minute: int) -> bool:
     return minute >= start or minute <= end
 
 
-def current_program(settings: Settings | None = None, now: datetime | None = None) -> dict:
-    now = now or datetime.now()
+def current_program(runtime: Settings | StationContext | None = None, now: datetime | None = None) -> dict:
+    context = coerce_station_context(runtime) if runtime is not None else None
+    now = now or datetime.now(ZoneInfo(context.profile.timezone) if context else None)
     day = DAY_KEYS[now.weekday()]
     minute = now.hour * 60 + now.minute
-    programs = _programs_from_db(settings) if settings is not None else [dict(program) for program in PROGRAMS]
+    programs = _programs_from_db(context) if context else [dict(program) for program in PROGRAMS]
     for program in programs:
         if _matches(program, day, minute):
             return dict(program)
     return dict(programs[0] if programs else PROGRAMS[0])
 
 
-def next_programs(settings: Settings | None = None, limit: int = 4) -> list[dict]:
-    programs = _programs_from_db(settings) if settings is not None else [dict(program) for program in PROGRAMS]
+def next_programs(runtime: Settings | StationContext | None = None, limit: int = 4) -> list[dict]:
+    context = coerce_station_context(runtime) if runtime is not None else None
+    programs = _programs_from_db(context) if context else [dict(program) for program in PROGRAMS]
     return [dict(program) for program in programs[:limit]]

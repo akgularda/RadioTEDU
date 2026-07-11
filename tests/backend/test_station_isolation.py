@@ -1,0 +1,146 @@
+from dataclasses import replace
+from datetime import datetime as RealDateTime
+from pathlib import Path
+
+import backend.scheduler as scheduler_module
+from backend.config import Settings
+from backend.database import connect, init_db
+from backend.scheduler import current_program, next_programs
+from backend.stations.context import StationContext, build_station_context
+from backend.stations.loader import load_station_profiles
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATABASE_CHANNEL_ID = "radiotedu"
+
+
+def contexts(tmp_path: Path) -> dict[str, StationContext]:
+    profiles = load_station_profiles(PROJECT_ROOT / "config" / "stations")
+    result: dict[str, StationContext] = {}
+    for station_id, profile in profiles.items():
+        data_root = tmp_path / "data" / "stations" / station_id
+        runtime = replace(
+            profile.runtime,
+            data_root=str(data_root),
+            database=str(data_root / "radio.db"),
+            music_root=str(tmp_path / "media" / "stations" / station_id / "music"),
+            announcement_root=str(data_root / "announcements"),
+            cache_root=str(data_root / "cache"),
+            log_root=str(data_root / "logs"),
+        )
+        result[station_id] = build_station_context(
+            Settings(static_dir=str(data_root / "public")),
+            replace(profile, runtime=runtime),
+        )
+    return result
+
+
+def test_station_databases_do_not_share_program_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    stations = contexts(tmp_path)
+    for context in stations.values():
+        init_db(context)
+
+    with connect(stations["radiotedu-en"]) as conn:
+        conn.execute(
+            "update programs set name=? where id=? and channel_id=?",
+            ("English-only edit", "morning_signal", DATABASE_CHANNEL_ID),
+        )
+        conn.commit()
+    with connect(stations["radiotedu-fr"]) as conn:
+        name = conn.execute(
+            "select name from programs where id=? and channel_id=?",
+            ("morning_signal", DATABASE_CHANNEL_ID),
+        ).fetchone()[0]
+
+    assert name != "English-only edit"
+    assert stations["radiotedu-en"].database_file != stations["radiotedu-fr"].database_file
+
+
+def test_station_channel_seed_uses_profile_identity(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    stations = contexts(tmp_path)
+    rows: dict[str, dict] = {}
+    for station_id, context in stations.items():
+        init_db(context)
+        with connect(context) as conn:
+            row = conn.execute(
+                "select id, name, description from channels where id=?",
+                (DATABASE_CHANNEL_ID,),
+            ).fetchone()
+        assert row is not None
+        rows[station_id] = dict(row)
+
+    assert rows["radiotedu-en"] == {
+        "id": DATABASE_CHANNEL_ID,
+        "name": "RadioTEDU",
+        "description": "Local AI radio running on your machine.",
+    }
+    assert rows["radiotedu-fr"] == {
+        "id": DATABASE_CHANNEL_ID,
+        "name": "RadioTEDU Français",
+        "description": "Radio IA locale en français diffusée depuis votre ordinateur.",
+    }
+
+
+def test_scheduler_reads_only_the_selected_station_database(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    stations = contexts(tmp_path)
+    for context in stations.values():
+        init_db(context)
+
+    with connect(stations["radiotedu-en"]) as conn:
+        conn.execute(
+            "update programs set name=? where id=? and channel_id=?",
+            ("English schedule", "morning_signal", DATABASE_CHANNEL_ID),
+        )
+        conn.commit()
+
+    monday_morning = RealDateTime(2026, 7, 6, 7, 0)
+    assert current_program(stations["radiotedu-en"], now=monday_morning)["name"] == "English schedule"
+    assert current_program(stations["radiotedu-fr"], now=monday_morning)["name"] != "English schedule"
+    assert next_programs(stations["radiotedu-en"], limit=1)[0]["name"] == "English schedule"
+    assert next_programs(stations["radiotedu-fr"], limit=1)[0]["name"] != "English schedule"
+
+
+def test_scheduler_uses_station_timezone_for_implicit_now(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    context = contexts(tmp_path)["radiotedu-en"]
+    init_db(context)
+
+    class RecordingDateTime:
+        observed_timezone = None
+
+        @classmethod
+        def now(cls, timezone=None):
+            cls.observed_timezone = timezone
+            return RealDateTime(2026, 7, 6, 7, 0, tzinfo=timezone)
+
+    monkeypatch.setattr(scheduler_module, "datetime", RecordingDateTime)
+
+    assert current_program(context)["id"] == "morning_signal"
+    assert str(RecordingDateTime.observed_timezone) == "Europe/Istanbul"
+
+
+def test_direct_settings_database_and_scheduler_behavior_is_preserved(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(
+        database_path=str(tmp_path / "legacy" / "radio.db"),
+        music_dir=str(tmp_path / "legacy" / "music"),
+        static_dir=str(tmp_path / "legacy" / "static"),
+    )
+
+    init_db(settings)
+    with connect(settings) as conn:
+        channel = conn.execute(
+            "select id, name, description from channels where id=?",
+            (DATABASE_CHANNEL_ID,),
+        ).fetchone()
+
+    assert dict(channel) == {
+        "id": DATABASE_CHANNEL_ID,
+        "name": "RadioTEDU",
+        "description": "Local AI radio running on your machine.",
+    }
+    assert current_program(settings, now=RealDateTime(2026, 7, 6, 7, 0))["id"] == "morning_signal"
+    assert next_programs(settings, limit=1)[0]["id"] == "morning_signal"
