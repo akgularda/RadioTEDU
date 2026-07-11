@@ -684,6 +684,55 @@ def _schema_contract(schema: str) -> tuple[TableContract, ...]:
         return tuple(_table_contract(conn, table) for table in tables)
 
 
+ANNOUNCEMENT_JOB_SCHEMA = """
+create table if not exists announcement_jobs (
+    job_id text primary key,
+    station_id text not null,
+    planner_key text not null,
+    language text not null,
+    kind text not null,
+    planned_airtime text not null,
+    deadline text not null,
+    freshness_class text not null,
+    priority integer not null,
+    state text not null,
+    text_state text not null,
+    audio_state text not null,
+    attempts integer not null default 0,
+    text_hash text,
+    audio_path text,
+    audio_checksum text,
+    lease_expires_at text,
+    failure_reason text,
+    created_at text not null,
+    updated_at text not null,
+    unique(station_id, planner_key)
+);
+
+create table if not exists announcement_job_events (
+    event_id text primary key,
+    job_id text not null references announcement_jobs(job_id) on delete cascade,
+    from_state text not null,
+    to_state text not null,
+    actor text not null,
+    reason text,
+    metadata_json text not null default '{}',
+    occurred_at text not null
+);
+
+create index if not exists announcement_jobs_station_state_deadline_idx
+    on announcement_jobs(station_id, state, deadline);
+create index if not exists announcement_jobs_station_airtime_idx
+    on announcement_jobs(station_id, planned_airtime);
+create index if not exists announcement_jobs_state_lease_expiry_idx
+    on announcement_jobs(state, lease_expires_at);
+create index if not exists announcement_jobs_station_kind_expiry_idx
+    on announcement_jobs(station_id, kind, deadline);
+create index if not exists announcement_job_events_job_time_idx
+    on announcement_job_events(job_id, occurred_at);
+"""
+
+
 DEFAULT_MIGRATIONS = (
     Migration(
         1,
@@ -693,5 +742,12 @@ DEFAULT_MIGRATIONS = (
         schema_contract=_schema_contract(SCHEMA),
         migration_step=migrate_program_columns,
         operation_name="migrate_program_columns_v1",
+    ),
+    Migration(
+        2,
+        "create_announcement_jobs",
+        ANNOUNCEMENT_JOB_SCHEMA,
+        required_columns=_schema_column_requirements(ANNOUNCEMENT_JOB_SCHEMA),
+        schema_contract=_schema_contract(ANNOUNCEMENT_JOB_SCHEMA),
     ),
 )
