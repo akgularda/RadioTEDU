@@ -431,6 +431,20 @@ def test_canonical_profiles_have_frozen_identity() -> None:
     )
 
 
+def test_profiles_have_no_shared_writable_or_identity_values() -> None:
+    profiles = load_station_profiles("config/stations")
+    english, french = profiles["radiotedu-en"], profiles["radiotedu-fr"]
+
+    assert english.runtime.database != french.runtime.database
+    assert english.runtime.cache_root != french.runtime.cache_root
+    assert english.runtime.log_root != french.runtime.log_root
+    assert english.audio.stream_mount != french.audio.stream_mount
+    assert english.snapshot_secret_ref != french.snapshot_secret_ref
+    english_routes = {english.public.route, *english.public.compatibility_routes}
+    french_routes = {french.public.route, *french.public.compatibility_routes}
+    assert english_routes.isdisjoint(french_routes)
+
+
 def _canonical_raw(station_id: str = "radiotedu-en") -> dict[str, object]:
     return json.loads(Path(f"config/stations/{station_id}.json").read_text(encoding="utf-8"))
 

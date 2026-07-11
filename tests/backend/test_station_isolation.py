@@ -223,6 +223,41 @@ def test_station_channel_seed_uses_profile_identity(tmp_path: Path, monkeypatch)
     }
 
 
+def test_logs_and_channel_names_are_database_local(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    stations = contexts(tmp_path)
+    for context in stations.values():
+        init_db(context)
+
+    with connect(stations["radiotedu-en"]) as conn:
+        conn.execute(
+            "insert into agent_logs(level,message,metadata_json,created_at) "
+            "values('info','english only','{}','2026-07-10T00:00:00+00:00')"
+        )
+        conn.commit()
+
+    with connect(stations["radiotedu-fr"]) as conn:
+        assert (
+            conn.execute(
+                "select count(*) from agent_logs where message='english only'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "select name from channels where id=?", (DATABASE_CHANNEL_ID,)
+            ).fetchone()[0]
+            == "RadioTEDU Français"
+        )
+
+    written_files = [path for path in tmp_path.rglob("*") if path.is_file()]
+    assert written_files
+    assert all(
+        any(path.is_relative_to(context.data_root) for context in stations.values())
+        for path in written_files
+    )
+
+
 def test_scheduler_reads_only_the_selected_station_database(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     stations = contexts(tmp_path)
