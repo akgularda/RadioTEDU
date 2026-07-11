@@ -283,6 +283,127 @@ def test_direct_settings_database_and_scheduler_behavior_is_preserved(tmp_path: 
     assert next_programs(settings, limit=1)[0]["id"] == "morning_signal"
 
 
+def test_create_app_accepts_exact_isolated_station_context(tmp_path: Path, monkeypatch) -> None:
+    from backend.app import create_app
+
+    monkeypatch.chdir(tmp_path)
+    french = contexts(tmp_path)["radiotedu-fr"]
+
+    app = create_app(station_context=french)
+
+    assert app.state.station_context is french
+    assert app.state.settings is french.settings
+    assert app.state.agent.context is french
+    assert app.state.orchestrator.context is french
+    assert app.state.orchestrator.agent is app.state.agent
+    assert app.title == "RadioTEDU Français"
+
+
+def test_create_app_settings_argument_remains_english_compatible(tmp_path: Path, monkeypatch) -> None:
+    from backend.app import create_app
+
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(
+        station_id="radiotedu-fr",
+        database_path=str(tmp_path / "legacy" / "radio.db"),
+        music_dir=str(tmp_path / "legacy" / "music"),
+        static_dir=str(tmp_path / "legacy" / "static"),
+    )
+
+    app = create_app(settings)
+
+    assert settings.station_id == "radiotedu-fr"
+    assert app.state.station_context.profile.station_id == "radiotedu-en"
+    assert app.state.station_context.settings.station_id == "radiotedu-en"
+    assert app.state.settings.database_file == tmp_path / "legacy" / "radio.db"
+    assert app.state.agent.context is app.state.station_context
+    assert app.state.orchestrator.agent is app.state.agent
+    assert app.state.orchestrator.context.profile == app.state.station_context.profile
+    assert app.state.orchestrator.context.database_file == app.state.station_context.database_file
+
+
+def test_create_app_rejects_settings_and_context_before_side_effects(tmp_path: Path, monkeypatch) -> None:
+    import backend.app as app_module
+
+    settings = Settings(database_path=str(tmp_path / "legacy.db"))
+    context = contexts(tmp_path)["radiotedu-en"]
+    effects: list[str] = []
+    for name in (
+        "ensure_station_runtime_dirs",
+        "ensure_runtime_dirs",
+        "init_db",
+        "generate_covers",
+        "RadioAgent",
+        "AutonomousOrchestrator",
+        "PublicSnapshotPusher",
+    ):
+        monkeypatch.setattr(app_module, name, lambda *args, _name=name, **kwargs: effects.append(_name), raising=False)
+
+    with pytest.raises(ValueError, match="pass settings or station_context, not both"):
+        app_module.create_app(settings=settings, station_context=context)
+
+    assert effects == []
+
+
+def test_default_create_app_selects_canonical_profile(tmp_path: Path, monkeypatch) -> None:
+    import backend.app as app_module
+
+    monkeypatch.chdir(tmp_path)
+    base_settings = Settings(
+        station_id="radiotedu-fr",
+        station_profiles_dir=str(PROJECT_ROOT / "config" / "stations"),
+    )
+    monkeypatch.setattr(app_module.Settings, "from_env", classmethod(lambda cls: base_settings))
+
+    app = app_module.create_app()
+
+    assert app.state.station_context.profile.station_id == "radiotedu-fr"
+    assert app.state.station_context.profile.locale == "fr-FR"
+    assert app.state.agent.context is app.state.station_context
+    assert app.state.orchestrator.context is app.state.station_context
+
+
+def test_default_profile_failure_precedes_runtime_side_effects(tmp_path: Path, monkeypatch) -> None:
+    import backend.app as app_module
+    from backend.stations.loader import StationProfileError
+
+    base_settings = Settings(
+        station_id="radiotedu-en",
+        station_profiles_dir=str(tmp_path / "invalid-profiles"),
+    )
+    effects: list[str] = []
+    monkeypatch.setattr(app_module.Settings, "from_env", classmethod(lambda cls: base_settings))
+
+    def reject_profiles(path):
+        effects.append(f"load:{path}")
+        raise StationProfileError("invalid canonical profile set")
+
+    monkeypatch.setattr(app_module, "load_station_profiles", reject_profiles, raising=False)
+    for name in (
+        "ensure_station_runtime_dirs",
+        "ensure_runtime_dirs",
+        "init_db",
+        "generate_covers",
+        "RadioAgent",
+        "AutonomousOrchestrator",
+        "PublicSnapshotPusher",
+    ):
+        monkeypatch.setattr(app_module, name, lambda *args, _name=name, **kwargs: effects.append(_name), raising=False)
+
+    with pytest.raises(StationProfileError, match="invalid canonical profile set"):
+        app_module.create_app()
+
+    assert effects == [f"load:{base_settings.station_profiles_path}"]
+
+
+def test_import_time_app_exposes_station_context() -> None:
+    from backend.app import app
+
+    assert app.state.station_context.profile.station_id in {"radiotedu-en", "radiotedu-fr"}
+    assert app.state.agent.context is app.state.station_context
+    assert app.state.orchestrator.context is app.state.station_context
+
+
 def test_agent_and_orchestrator_retain_their_station_contexts(tmp_path: Path, monkeypatch) -> None:
     from backend import orchestrator as orchestrator_module
     from backend import radio_agent as radio_agent_module

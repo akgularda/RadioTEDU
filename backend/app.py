@@ -33,24 +33,56 @@ from .radio_agent import RadioAgent
 from .scheduler import current_program, next_programs
 from .search.rss import RSSSearchProvider
 from .search.searxng import SearXNGSearchProvider
+from .stations.context import StationContext, build_station_context, ensure_station_runtime_dirs
+from .stations.loader import StationProfileError, load_station_profiles
 
 
 STARTED_AT = datetime.now(timezone.utc)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or Settings.from_env()
-    ensure_runtime_dirs(settings)
-    init_db(settings)
-    generate_covers(settings)
-    agent = RadioAgent(settings)
-    orchestrator = AutonomousOrchestrator(settings, agent)
+def create_app(
+    settings: Settings | None = None,
+    station_context: StationContext | None = None,
+) -> FastAPI:
+    if settings is not None and station_context is not None:
+        raise ValueError("pass settings or station_context, not both")
+
+    if station_context is not None:
+        context = station_context
+        ensure_station_runtime_dirs(context)
+        init_db(context)
+        generate_covers(context.settings)
+        agent = RadioAgent(context)
+        orchestrator = AutonomousOrchestrator(context, agent)
+    elif settings is not None:
+        ensure_runtime_dirs(settings)
+        init_db(settings)
+        generate_covers(settings)
+        agent = RadioAgent(settings)
+        orchestrator = AutonomousOrchestrator(settings, agent)
+        context = agent.context
+    else:
+        base_settings = Settings.from_env()
+        profiles = load_station_profiles(base_settings.station_profiles_path)
+        try:
+            profile = profiles[base_settings.station_id]
+        except KeyError as exc:
+            raise StationProfileError(f"unknown STATION_ID: {base_settings.station_id}") from exc
+        context = build_station_context(base_settings, profile)
+        ensure_station_runtime_dirs(context)
+        init_db(context)
+        generate_covers(context.settings)
+        agent = RadioAgent(context)
+        orchestrator = AutonomousOrchestrator(context, agent)
+
+    settings = context.settings
     public_snapshot_pusher = (
         PublicSnapshotPusher(settings, agent)
         if settings.public_sync_url and settings.public_sync_token
         else None
     )
-    app = FastAPI(title="RadioTEDU")
+    app = FastAPI(title=context.profile.display_name)
+    app.state.station_context = context
     app.state.settings = settings
     app.state.agent = agent
     app.state.orchestrator = orchestrator
