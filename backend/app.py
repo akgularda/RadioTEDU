@@ -917,9 +917,9 @@ def health(settings: Settings, agent: RadioAgent) -> dict:
     }
 
 
-app = create_app()
+app: FastAPI | None = None
 
 
 if __name__ == "__main__":
     settings = Settings.from_env()
-    uvicorn.run("backend.app:app", host=settings.api_host, port=settings.api_port, reload=False)
+    uvicorn.run(create_app(settings), host=settings.api_host, port=settings.api_port, reload=False)

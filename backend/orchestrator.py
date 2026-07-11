@@ -11,7 +11,6 @@ from .database import connect, init_db, log_event, now_iso
 from .llm import ollama_runtime_status
 from .music_library import scan_music
 from .ollama_setup import repair_ollama_runtime
-from .public_dashboard import PublicSnapshotPusher
 from .radio_agent import RadioAgent
 from .stations.context import StationContext, coerce_station_context
 
@@ -71,7 +70,6 @@ class AutonomousOrchestrator:
         self.last_tick_at: datetime | None = None
         self.last_strategy_at: datetime | None = None
         self.last_error: str | None = None
-        self.public_pusher = PublicSnapshotPusher(self.settings, agent)
 
     def start_background(self) -> dict:
         if self._thread and self._thread.is_alive():
@@ -172,14 +170,12 @@ class AutonomousOrchestrator:
             played = bool(result.get("started"))
             if played:
                 prebuffer = self.agent.ensure_announcement_prebuffer()
-        public_sync = self.public_pusher.maybe_push()
         return {
             "played": played,
             "strategy_updated": strategy_updated,
             "prebuffer": prebuffer,
             "recovery": recovery,
             "executed_task": executed_task,
-            "public_sync": public_sync,
         }
 
     def execute_next_task(self) -> dict:

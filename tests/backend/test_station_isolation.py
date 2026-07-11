@@ -1,10 +1,13 @@
 import os
+import subprocess
+import sys
 from dataclasses import replace
 from datetime import datetime as RealDateTime
 from pathlib import Path
 from unittest.mock import PropertyMock
 
 import pytest
+from fastapi.testclient import TestClient
 
 import backend.database as database_module
 import backend.scheduler as scheduler_module
@@ -283,6 +286,57 @@ def test_direct_settings_database_and_scheduler_behavior_is_preserved(tmp_path: 
     assert next_programs(settings, limit=1)[0]["id"] == "morning_signal"
 
 
+def test_t00_importing_application_module_creates_no_runtime_artifacts(tmp_path: Path) -> None:
+    environment = {**os.environ, "PYTHONPATH": str(PROJECT_ROOT)}
+    subprocess.run(
+        [sys.executable, "-c", "import backend.app"],
+        cwd=tmp_path,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_t00_app_is_the_only_pusher_lifecycle_owner(tmp_path: Path, monkeypatch) -> None:
+    import backend.app as app_module
+
+    class RecordingPusher:
+        def __init__(self, settings, agent) -> None:
+            self.settings = settings
+            self.agent = agent
+            self.starts = 0
+            self.stops = 0
+
+        def start_background(self) -> dict:
+            self.starts += 1
+            return {"running": True}
+
+        def stop_background(self) -> dict:
+            self.stops += 1
+            return {"running": False}
+
+        def status(self) -> dict:
+            return {"running": self.starts > self.stops}
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app_module, "PublicSnapshotPusher", RecordingPusher)
+    context = contexts(tmp_path)["radiotedu-en"]
+    context.settings.autonomy_enabled = False
+    context.settings.public_sync_url = "https://public.example.test/api/public/snapshot"
+    context.settings.public_sync_token = "test-token"
+
+    app = app_module.create_app(station_context=context)
+    pusher = app.state.public_snapshot_pusher
+
+    assert isinstance(pusher, RecordingPusher)
+    assert not hasattr(app.state.orchestrator, "public_pusher")
+    with TestClient(app):
+        assert pusher.starts == 1
+    assert pusher.stops == 1
+
+
 def test_create_app_accepts_exact_isolated_station_context(tmp_path: Path, monkeypatch) -> None:
     from backend.app import create_app
 
@@ -396,12 +450,10 @@ def test_default_profile_failure_precedes_runtime_side_effects(tmp_path: Path, m
     assert effects == [f"load:{base_settings.station_profiles_path}"]
 
 
-def test_import_time_app_exposes_station_context() -> None:
+def test_t00_import_time_app_is_uninitialized() -> None:
     from backend.app import app
 
-    assert app.state.station_context.profile.station_id in {"radiotedu-en", "radiotedu-fr"}
-    assert app.state.agent.context is app.state.station_context
-    assert app.state.orchestrator.context is app.state.station_context
+    assert app is None
 
 
 def test_agent_and_orchestrator_retain_their_station_contexts(tmp_path: Path, monkeypatch) -> None:
@@ -412,16 +464,10 @@ def test_agent_and_orchestrator_retain_their_station_contexts(tmp_path: Path, mo
         def __init__(self, settings):
             self.settings = settings
 
-    class StubPusher:
-        def __init__(self, settings, agent):
-            self.settings = settings
-            self.agent = agent
-
     initialized: list[StationContext] = []
     monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
     monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda settings: object())
     monkeypatch.setattr(radio_agent_module, "init_db", initialized.append)
-    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
     stations = contexts(tmp_path)
 
     agents = {
@@ -445,7 +491,7 @@ def test_agent_and_orchestrator_retain_their_station_contexts(tmp_path: Path, mo
         assert orchestrator.settings is context.settings
         assert orchestrator._database_runtime is context
         assert orchestrator.agent is agent
-        assert orchestrator.public_pusher.settings is context.settings
+        assert not hasattr(orchestrator, "public_pusher")
     assert agents["radiotedu-en"].context.profile.station_id == "radiotedu-en"
     assert orchestrators["radiotedu-fr"].context.profile.station_id == "radiotedu-fr"
     assert orchestrators["radiotedu-en"]._thread_name != orchestrators["radiotedu-fr"]._thread_name
@@ -471,16 +517,10 @@ def test_agent_and_orchestrator_database_and_schedule_calls_use_injected_context
         def synthesize(self, text, output_path, voice=None):
             return output_path
 
-    class StubPusher:
-        def __init__(self, settings, agent):
-            self.settings = settings
-            self.agent = agent
-
     monkeypatch.chdir(tmp_path)
     station = contexts(tmp_path)["radiotedu-fr"]
     monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
     monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda settings: StubTTS())
-    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
     agent_connect = radio_agent_module.connect
     orchestrator_connect = orchestrator_module.connect
     agent_connect_calls: list[StationContext] = []
@@ -525,11 +565,6 @@ def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp
         def synthesize(self, text, output_path, voice=None):
             return output_path
 
-    class StubPusher:
-        def __init__(self, settings, agent):
-            self.settings = settings
-            self.agent = agent
-
     class StubResult:
         def __init__(self, row=None):
             self.row = row
@@ -573,7 +608,6 @@ def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp
         "current_program",
         lambda runtime: schedule_calls.append(runtime) or {"id": "morning_signal", "name": "Morning Signal"},
     )
-    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
     monkeypatch.setattr(
         orchestrator_module,
         "connect",
@@ -628,16 +662,11 @@ def _assert_orchestrator_pair_rejected_before_side_effects(runtime, agent, monke
         def __init__(self):
             side_effects.append("thread-event")
 
-    class StubPusher:
-        def __init__(self, settings, selected_agent):
-            side_effects.append("public-pusher")
-
     def forbidden_database(*args, **kwargs):
         side_effects.append("database")
         raise AssertionError("database work must not start for a mismatched pair")
 
     monkeypatch.setattr(orchestrator_module.threading, "Event", StubEvent)
-    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
     monkeypatch.setattr(orchestrator_module, "connect", forbidden_database)
     monkeypatch.setattr(orchestrator_module, "init_db", forbidden_database)
 
