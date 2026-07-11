@@ -10,18 +10,23 @@ from .playback import PlaybackController, QueueItem
 from .scheduler import current_program
 from .search.rss import RSSSearchProvider
 from .search.searxng import SearXNGSearchProvider
+from .stations.context import StationContext, coerce_station_context
 from .tts.factory import build_tts_provider
 from .weather.open_meteo import OpenMeteoWeatherProvider
 
 
 class RadioAgent:
-    def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-        init_db(settings)
-        self.playback = PlaybackController(settings)
-        self.tts = build_tts_provider(settings)
+    def __init__(self, runtime: Settings | StationContext) -> None:
+        self.context = coerce_station_context(runtime)
+        self.settings = self.context.settings
+        self._database_runtime: Settings | StationContext = (
+            self.context if isinstance(runtime, StationContext) else self.settings
+        )
+        init_db(self._database_runtime)
+        self.playback = PlaybackController(self.settings)
+        self.tts = build_tts_provider(self.settings)
         self.last_search_at: datetime | None = None
-        self.weather_provider = OpenMeteoWeatherProvider(settings)
+        self.weather_provider = OpenMeteoWeatherProvider(self.settings)
         self.last_weather_at: datetime | None = None
         self.last_weather_context: dict | None = None
         self.last_llm_runtime_at: datetime | None = None
@@ -33,7 +38,7 @@ class RadioAgent:
         self.last_weather_announcement_at: datetime | None = None
 
     def start(self) -> dict:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             count = conn.execute("select count(*) from tracks").fetchone()[0]
             if count == 0:
                 conn.execute("update channels set status='idle', updated_at=? where id='radiotedu'", (now_iso(),))
@@ -46,7 +51,7 @@ class RadioAgent:
 
     def stop(self) -> dict:
         self.playback.running = False
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute("update channels set status='stopped', updated_at=? where id='radiotedu'", (now_iso(),))
             log_event(conn, "info", "RadioTEDU stopped.")
             conn.commit()
@@ -54,7 +59,7 @@ class RadioAgent:
 
     def skip(self) -> dict:
         self.playback.skip()
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             log_event(conn, "info", "Skip requested.")
             conn.commit()
         return self.queue_next_track()
@@ -68,7 +73,7 @@ class RadioAgent:
         clip_path = self.tts.synthesize(safe_text, str(output))
         item = QueueItem("tts", "User message", clip_path, duration_seconds=1.0)
         self.playback.add(item)
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute(
                 "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
                 ("user_message", safe_text, clip_path, None, None, now_iso()),
@@ -81,14 +86,14 @@ class RadioAgent:
         safe_feedback = " ".join(feedback.strip().split())[:180]
         if not safe_feedback:
             return {"queued": False, "reason": "empty_text"}
-        program = current_program(self.settings)
+        program = current_program(self._database_runtime)
         reply = self._listener_reply_text(safe_feedback, program)
         filename = f"listener_reply_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}.wav"
         output = self.settings.tts_path / filename
         voice = self._program_voice(program)
         clip_path = self.tts.synthesize(reply, str(output), voice=voice)
         self.playback.add(QueueItem("tts", "RadioTEDU listener reply", clip_path, duration_seconds=1.0))
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute(
                 "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
                 ("listener_reply", reply, clip_path, voice or getattr(self.tts, "provider_name", "tts"), program["id"], now_iso()),
@@ -98,10 +103,10 @@ class RadioAgent:
         return {"queued": True, "file_path": clip_path, "text": reply}
 
     def queue_next_track(self) -> dict:
-        program = current_program(self.settings)
+        program = current_program(self._database_runtime)
         prebuffer = self.announcement_readiness(program["id"])
         if not prebuffer["ready_to_broadcast"]:
-            with connect(self.settings) as conn:
+            with connect(self._database_runtime) as conn:
                 log_event(conn, "info", "Waiting for announcement prebuffer before broadcast.", prebuffer)
                 conn.commit()
             return {"started": False, "reason": "announcement_prebuffer_not_ready", **prebuffer}
@@ -143,7 +148,7 @@ class RadioAgent:
                 track_id=int(selected["id"]),
             )
         )
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             log_event(conn, "info", f"Queued {selected['title']} by {selected['artist']}.", {"program": program["name"]})
             if choice and choice.used_fallback:
                 log_event(conn, "warning", "LLM fallback used for track decision.", {"reason": choice.reason})
@@ -159,7 +164,7 @@ class RadioAgent:
 
     def announcement_readiness(self, program_id: str | None = None) -> dict:
         required = max(0, int(self.settings.min_ready_announcements))
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             if program_id:
                 ready = conn.execute(
                     "select count(*) from announcement_queue where status='ready' and (program_id=? or program_id is null)",
@@ -215,7 +220,7 @@ class RadioAgent:
     def ensure_announcement_prebuffer(self, program_id: str | None = None, max_to_prepare: int | None = None) -> dict:
         required = max(0, int(self.settings.min_ready_announcements))
         maximum = max(required, int(self.settings.max_ready_announcements))
-        program = current_program(self.settings)
+        program = current_program(self._database_runtime)
         target_program_id = program_id or program["id"]
         if self._has_tracks():
             self._retire_legacy_generic_prebuffer(target_program_id)
@@ -241,7 +246,7 @@ class RadioAgent:
             output = self.settings.tts_path / filename
             voice = self._program_voice(program)
             clip_path = self.tts.synthesize(text, str(output), voice=voice)
-            with connect(self.settings) as conn:
+            with connect(self._database_runtime) as conn:
                 if track_id is not None and self._ready_track_exists(conn, program_id or program["id"], int(track_id)):
                     conn.commit()
                     readiness = self.announcement_readiness(program_id)
@@ -295,7 +300,7 @@ class RadioAgent:
         return "unknown"
 
     def _consume_ready_announcement(self, program_id: str) -> dict | None:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             row = conn.execute(
                 """
                 select id, text, file_path, metadata_json from announcement_queue
@@ -483,7 +488,7 @@ class RadioAgent:
             placeholders = ",".join("?" for _ in excluded)
             exclude_clause = f"and id not in ({placeholders})"
             params.extend(excluded)
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             rows = conn.execute(
                 f"""
                 select * from tracks
@@ -501,7 +506,7 @@ class RadioAgent:
         return rows_to_dicts(rows)
 
     def _recent_tracks(self) -> list[dict]:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             rows = conn.execute(
                 """
                 select tracks.title, tracks.artist from play_history
@@ -533,7 +538,7 @@ class RadioAgent:
 
     def _ready_announcement_track_ids(self, program_id: str) -> set[int]:
         planned: set[int] = set()
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             rows = conn.execute(
                 """
                 select metadata_json from announcement_queue
@@ -558,7 +563,7 @@ class RadioAgent:
             track_id = int(metadata["track_id"])
         except Exception:
             return None
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             row = conn.execute("select * from tracks where id=?", (track_id,)).fetchone()
         return dict(row) if row else None
 
@@ -576,13 +581,13 @@ class RadioAgent:
         return " ".join(words[:32])
 
     def _has_tracks(self) -> bool:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             count = conn.execute("select count(*) from tracks").fetchone()[0]
         return int(count) > 0
 
     def _retire_legacy_generic_prebuffer(self, program_id: str) -> None:
         stale_ids: list[int] = []
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             rows = conn.execute(
                 """
                 select id, metadata_json from announcement_queue
@@ -608,7 +613,7 @@ class RadioAgent:
     def _retire_duplicate_track_prebuffer(self, program_id: str) -> None:
         seen_track_ids: set[int] = set()
         stale_ids: list[int] = []
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             rows = conn.execute(
                 """
                 select id, metadata_json from announcement_queue
@@ -681,10 +686,10 @@ class RadioAgent:
     def _narrate(self, text: str, program_id: str) -> str:
         filename = f"dj_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.wav"
         output = self.settings.tts_path / filename
-        program = current_program(self.settings)
+        program = current_program(self._database_runtime)
         voice = self._program_voice(program)
         clip_path = self.tts.synthesize(text, str(output), voice=voice)
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute(
                 "insert into generated_clips (clip_type, text, file_path, voice, program_id, created_at) values (?, ?, ?, ?, ?, ?)",
                 ("dj_line", text, clip_path, voice, program_id, now_iso()),
@@ -699,7 +704,7 @@ class RadioAgent:
         return voice or None
 
     def _record_play(self, track_id: int, program_id: str, duration_seconds: float | None) -> None:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute(
                 "insert into play_history (track_id, program_id, played_at, duration_seconds, source) values (?, ?, ?, ?, ?)",
                 (track_id, program_id, now_iso(), duration_seconds, "local_file"),

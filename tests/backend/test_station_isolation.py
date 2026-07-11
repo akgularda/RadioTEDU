@@ -281,3 +281,196 @@ def test_direct_settings_database_and_scheduler_behavior_is_preserved(tmp_path: 
     }
     assert current_program(settings, now=RealDateTime(2026, 7, 6, 7, 0))["id"] == "morning_signal"
     assert next_programs(settings, limit=1)[0]["id"] == "morning_signal"
+
+
+def test_agent_and_orchestrator_retain_their_station_contexts(tmp_path: Path, monkeypatch) -> None:
+    from backend import orchestrator as orchestrator_module
+    from backend import radio_agent as radio_agent_module
+
+    class StubPlayback:
+        def __init__(self, settings):
+            self.settings = settings
+
+    class StubPusher:
+        def __init__(self, settings, agent):
+            self.settings = settings
+            self.agent = agent
+
+    initialized: list[StationContext] = []
+    monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
+    monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda settings: object())
+    monkeypatch.setattr(radio_agent_module, "init_db", initialized.append)
+    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
+    stations = contexts(tmp_path)
+
+    agents = {
+        station_id: radio_agent_module.RadioAgent(context)
+        for station_id, context in stations.items()
+    }
+    orchestrators = {
+        station_id: orchestrator_module.AutonomousOrchestrator(stations[station_id], agent)
+        for station_id, agent in agents.items()
+    }
+
+    assert initialized == list(stations.values())
+    for station_id, context in stations.items():
+        agent = agents[station_id]
+        orchestrator = orchestrators[station_id]
+        assert agent.context is context
+        assert agent.settings is context.settings
+        assert agent._database_runtime is context
+        assert agent.playback.settings is context.settings
+        assert orchestrator.context is context
+        assert orchestrator.settings is context.settings
+        assert orchestrator._database_runtime is context
+        assert orchestrator.agent is agent
+        assert orchestrator.public_pusher.settings is context.settings
+    assert agents["radiotedu-en"].context.profile.station_id == "radiotedu-en"
+    assert orchestrators["radiotedu-fr"].context.profile.station_id == "radiotedu-fr"
+    assert orchestrators["radiotedu-en"]._thread_name != orchestrators["radiotedu-fr"]._thread_name
+
+
+def test_agent_and_orchestrator_database_and_schedule_calls_use_injected_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from backend import orchestrator as orchestrator_module
+    from backend import radio_agent as radio_agent_module
+
+    class StubPlayback:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def add(self, item) -> None:
+            self.item = item
+
+    class StubTTS:
+        provider_name = "stub"
+
+        def synthesize(self, text, output_path, voice=None):
+            return output_path
+
+    class StubPusher:
+        def __init__(self, settings, agent):
+            self.settings = settings
+            self.agent = agent
+
+    monkeypatch.chdir(tmp_path)
+    station = contexts(tmp_path)["radiotedu-fr"]
+    monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
+    monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda settings: StubTTS())
+    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
+    agent_connect = radio_agent_module.connect
+    orchestrator_connect = orchestrator_module.connect
+    agent_connect_calls: list[StationContext] = []
+    orchestrator_connect_calls: list[StationContext] = []
+    schedule_calls: list[StationContext] = []
+
+    def recording_agent_connect(runtime):
+        agent_connect_calls.append(runtime)
+        return agent_connect(runtime)
+
+    def recording_orchestrator_connect(runtime):
+        orchestrator_connect_calls.append(runtime)
+        return orchestrator_connect(runtime)
+
+    def recording_current_program(runtime):
+        schedule_calls.append(runtime)
+        return {"id": "morning_signal", "name": "Morning Signal"}
+
+    monkeypatch.setattr(radio_agent_module, "connect", recording_agent_connect)
+    monkeypatch.setattr(radio_agent_module, "current_program", recording_current_program)
+    monkeypatch.setattr(orchestrator_module, "connect", recording_orchestrator_connect)
+
+    agent = radio_agent_module.RadioAgent(station)
+    agent.queue_listener_reply("Bonjour", "test")
+    orchestrator = orchestrator_module.AutonomousOrchestrator(station, agent)
+    orchestrator.status()
+
+    assert schedule_calls == [station]
+    assert agent_connect_calls and all(runtime is station for runtime in agent_connect_calls)
+    assert orchestrator_connect_calls and all(runtime is station for runtime in orchestrator_connect_calls)
+
+
+def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp_path: Path, monkeypatch) -> None:
+    from backend import orchestrator as orchestrator_module
+    from backend import radio_agent as radio_agent_module
+
+    class StubPlayback:
+        def __init__(self, settings):
+            self.settings = settings
+
+    class StubTTS:
+        def synthesize(self, text, output_path, voice=None):
+            return output_path
+
+    class StubPusher:
+        def __init__(self, settings, agent):
+            self.settings = settings
+            self.agent = agent
+
+    class StubResult:
+        def __init__(self, row=None):
+            self.row = row
+
+        def fetchone(self):
+            return self.row
+
+    class StubConnection:
+        def execute(self, sql, parameters=()):
+            return StubResult((0,) if "count(*)" in sql else None)
+
+        def commit(self) -> None:
+            pass
+
+    class StubConnect:
+        def __enter__(self):
+            return StubConnection()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    settings = Settings(
+        database_path=str(tmp_path / "legacy" / "radio.db"),
+        music_dir=str(tmp_path / "legacy" / "music"),
+        static_dir=str(tmp_path / "legacy" / "static"),
+    )
+    initialized = []
+    agent_connect_calls = []
+    orchestrator_connect_calls = []
+    schedule_calls = []
+    monkeypatch.setattr(radio_agent_module, "PlaybackController", StubPlayback)
+    monkeypatch.setattr(radio_agent_module, "build_tts_provider", lambda runtime: StubTTS())
+    monkeypatch.setattr(radio_agent_module, "init_db", initialized.append)
+    monkeypatch.setattr(
+        radio_agent_module,
+        "connect",
+        lambda runtime: agent_connect_calls.append(runtime) or StubConnect(),
+    )
+    monkeypatch.setattr(
+        radio_agent_module,
+        "current_program",
+        lambda runtime: schedule_calls.append(runtime) or {"id": "morning_signal", "name": "Morning Signal"},
+    )
+    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
+    monkeypatch.setattr(
+        orchestrator_module,
+        "connect",
+        lambda runtime: orchestrator_connect_calls.append(runtime) or StubConnect(),
+    )
+
+    agent = radio_agent_module.RadioAgent(settings)
+    agent._narrate("Legacy context", "morning_signal")
+    orchestrator = orchestrator_module.AutonomousOrchestrator(settings, agent)
+    orchestrator.stop_background()
+
+    assert agent.context.profile.station_id == "radiotedu-en"
+    assert orchestrator.context.profile.station_id == "radiotedu-en"
+    assert agent.settings is not settings
+    assert orchestrator.settings is not settings
+    assert initialized == [agent.settings]
+    assert agent._database_runtime is agent.settings
+    assert orchestrator._database_runtime is orchestrator.settings
+    assert schedule_calls == [agent.settings]
+    assert agent_connect_calls == [agent.settings]
+    assert orchestrator_connect_calls == [orchestrator.settings]
