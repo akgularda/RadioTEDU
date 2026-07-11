@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "pack_id": "radiotedu-en-voices-v1",
+  "station_id": "radiotedu-en",
+  "language": "en",
+  "locale": "en-US",
+  "commissioning_state": "blocked",
+  "source_candidate_manifest": "config/voices/radiotedu-en-candidates-v1.json",
+  "hosts": [
+    {
+      "host_id": "maya",
+      "gender": "woman",
+      "dayparts": ["morning"],
+      "approved": false,
+      "styles": {"station_id": "energetic_clear", "track_intro": "energetic_clear", "track_outro": "energetic_clear", "weather": "energetic_clear", "news": "energetic_clear", "listener_reply": "energetic_clear", "program_open": "energetic_clear", "program_close": "energetic_clear"}
+    },
+    {
+      "host_id": "elliot",
+      "gender": "man",
+      "dayparts": ["daytime"],
+      "approved": false,
+      "styles": {"station_id": "conversational_clear", "track_intro": "conversational_clear", "track_outro": "conversational_clear", "weather": "conversational_clear", "news": "conversational_clear", "listener_reply": "conversational_clear", "program_open": "conversational_clear", "program_close": "conversational_clear"}
+    },
+    {
+      "host_id": "selin",
+      "gender": "woman",
+      "dayparts": ["night"],
+      "approved": false,
+      "styles": {"station_id": "calm_intimate", "track_intro": "calm_intimate", "track_outro": "calm_intimate", "weather": "calm_intimate", "news": "calm_intimate", "listener_reply": "calm_intimate", "program_open": "calm_intimate", "program_close": "calm_intimate"}
+    },
+    {
+      "host_id": "theo",
+      "gender": "man",
+      "dayparts": ["weekend"],
+      "approved": false,
+      "styles": {"station_id": "relaxed_friendly", "track_intro": "relaxed_friendly", "track_outro": "relaxed_friendly", "weather": "relaxed_friendly", "news": "relaxed_friendly", "listener_reply": "relaxed_friendly", "program_open": "relaxed_friendly", "program_close": "relaxed_friendly"}
+    }
+  ],
+  "voice_qualification": {
+    "state": "blocked_missing_approved_local_qwen_references",
+    "generation_permitted": false,
+    "approved_local_references": [],
+    "candidate_model_checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "blocking_reasons": ["No approved local Qwen voice reference is present.", "No model download or speech generation is authorized by T15."]
+  },
+  "imaging_qualification": {
+    "state": "blocked_missing_promo_assets",
+    "available_categories": ["jingle"],
+    "missing_categories": ["promo"],
+    "commissioning_queue": {"state": "not_authorized_by_t15", "next_work_order": null},
+    "approved_references": [{"source_manifest": "packaging/imaging/media/imaging/radiotedu-en/manifest.json", "category": "jingle", "asset_count": 24}]
+  }
+}

@@ -4,14 +4,16 @@ import json
 import re
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
+from .announcements.models import AnnouncementJob
 from .config import Settings
 from .database import connect, init_db, log_event, now_iso
 from .llm import ollama_runtime_status
 from .music_library import scan_music
 from .ollama_setup import repair_ollama_runtime
-from .public_dashboard import PublicSnapshotPusher
 from .radio_agent import RadioAgent
+from .stations.context import StationContext, coerce_station_context
 
 
 NONFINANCIAL_GUARD = re.compile(
@@ -21,24 +23,62 @@ NONFINANCIAL_GUARD = re.compile(
 )
 
 
+def _normalized_runtime_identity(context: StationContext) -> tuple[Path, ...]:
+    return (
+        context.database_file,
+        context.data_root,
+        context.music_root,
+        context.announcement_root,
+        context.cache_root,
+        context.log_root,
+    )
+
+
+def _validate_agent_runtime_pair(
+    runtime: Settings | StationContext,
+    context: StationContext,
+    agent: RadioAgent,
+) -> None:
+    agent_context = getattr(agent, "context", None)
+    if not isinstance(agent_context, StationContext):
+        raise ValueError("station runtime and agent context mismatch")
+    if isinstance(runtime, StationContext):
+        if agent_context is not runtime:
+            raise ValueError("station runtime and agent context mismatch")
+        return
+    if (
+        type(agent_context) is not type(context)
+        or context.profile.station_id != "radiotedu-en"
+        or agent_context.profile.station_id != "radiotedu-en"
+        or _normalized_runtime_identity(agent_context) != _normalized_runtime_identity(context)
+    ):
+        raise ValueError("station runtime and agent context mismatch")
+
+
 class AutonomousOrchestrator:
-    def __init__(self, settings: Settings, agent: RadioAgent) -> None:
-        self.settings = settings
+    def __init__(self, runtime: Settings | StationContext, agent: RadioAgent) -> None:
+        context = coerce_station_context(runtime)
+        _validate_agent_runtime_pair(runtime, context, agent)
+        self.context = context
+        self.settings = self.context.settings
+        self._database_runtime: Settings | StationContext = (
+            self.context if isinstance(runtime, StationContext) else self.settings
+        )
         self.agent = agent
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._thread_name = f"radiotedu-orchestrator-{self.context.profile.station_id}"
         self.last_tick_at: datetime | None = None
         self.last_strategy_at: datetime | None = None
         self.last_error: str | None = None
-        self.public_pusher = PublicSnapshotPusher(settings, agent)
 
     def start_background(self) -> dict:
         if self._thread and self._thread.is_alive():
             return {"running": True, "already_running": True}
         self._stop.clear()
-        self._thread = threading.Thread(target=self._run_forever, name="radiotedu-orchestrator", daemon=True)
+        self._thread = threading.Thread(target=self._run_forever, name=self._thread_name, daemon=True)
         self._thread.start()
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute("update channels set status='live', updated_at=? where id='radiotedu'", (now_iso(),))
             log_event(conn, "info", "Autonomous orchestrator started.")
             conn.commit()
@@ -48,7 +88,7 @@ class AutonomousOrchestrator:
         self._stop.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute("update channels set status='stopped', updated_at=? where id='radiotedu'", (now_iso(),))
             log_event(conn, "info", "Autonomous orchestrator stopped.")
             conn.commit()
@@ -59,7 +99,7 @@ class AutonomousOrchestrator:
         revision = self._metric("strategy_revision")
         self_review = self._metric("last_self_review")
         strategy_policy = self._json_metric("strategy_policy_json")
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             memory_count = conn.execute("select count(*) from autonomy_memory").fetchone()[0]
             draft_count = conn.execute("select count(*) from outbound_drafts").fetchone()[0]
         return {
@@ -80,7 +120,7 @@ class AutonomousOrchestrator:
         clean_source = " ".join(source.strip().split())[:80] or "dashboard"
         if not content:
             return {"stored": False, "reason": "empty_text"}
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             conn.execute(
                 "insert into listener_events (channel_id, event_type, created_at, metadata_json) values ('radiotedu', ?, ?, ?)",
                 ("feedback", now_iso(), json.dumps({"text": content, "source": clean_source}, ensure_ascii=True)),
@@ -94,11 +134,28 @@ class AutonomousOrchestrator:
         reply = self.agent.queue_listener_reply(content, clean_source)
         return {"stored": True, "reply_queued": bool(reply.get("queued")), "reply": reply}
 
+    def enqueue_announcement_job(
+        self,
+        job: AnnouncementJob,
+        *,
+        dispatch_rule: str,
+        dispatch_inputs: dict[str, object],
+    ) -> dict:
+        """Accept only this station's queued dispatch intent without invoking AI."""
+
+        if job.station_id != self.context.profile.station_id or job.language.casefold() != self.context.profile.language.casefold():
+            raise ValueError("announcement job does not belong to this orchestrator")
+        return self.agent.enqueue_announcement_job(
+            job,
+            dispatch_rule=dispatch_rule,
+            dispatch_inputs=dispatch_inputs,
+        )
+
     def tick(self) -> dict:
-        init_db(self.settings)
+        init_db(self._database_runtime)
         self.last_tick_at = datetime.now(timezone.utc)
         executed_task = self.execute_next_task()
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             track_count = conn.execute("select count(*) from tracks").fetchone()[0]
             if track_count == 0:
                 conn.execute("update channels set status='idle', updated_at=? where id='radiotedu'", (now_iso(),))
@@ -121,7 +178,7 @@ class AutonomousOrchestrator:
 
         strategy_updated = self._maybe_update_strategy(track_count)
         prebuffer = self.agent.ensure_announcement_prebuffer(max_to_prepare=1)
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             self._evaluate_prebuffer_health(conn, prebuffer)
             recovery = self._recovery_snapshot(conn)
             conn.commit()
@@ -131,19 +188,17 @@ class AutonomousOrchestrator:
             played = bool(result.get("started"))
             if played:
                 prebuffer = self.agent.ensure_announcement_prebuffer()
-        public_sync = self.public_pusher.maybe_push()
         return {
             "played": played,
             "strategy_updated": strategy_updated,
             "prebuffer": prebuffer,
             "recovery": recovery,
             "executed_task": executed_task,
-            "public_sync": public_sync,
         }
 
     def execute_next_task(self) -> dict:
-        init_db(self.settings)
-        with connect(self.settings) as conn:
+        init_db(self._database_runtime)
+        with connect(self._database_runtime) as conn:
             task = conn.execute(
                 """
                 select *
@@ -164,7 +219,7 @@ class AutonomousOrchestrator:
             conn.commit()
         try:
             details = self._run_task(dict(task))
-            with connect(self.settings) as conn:
+            with connect(self._database_runtime) as conn:
                 conn.execute(
                     "update autonomous_tasks set status='completed', details_json=?, completed_at=?, updated_at=? where id=?",
                     (json.dumps(details, ensure_ascii=True), now_iso(), now_iso(), task_id),
@@ -173,7 +228,7 @@ class AutonomousOrchestrator:
                 conn.commit()
             return {"executed": True, "task_type": task["task_type"], "status": "completed", "details": details}
         except Exception as exc:
-            with connect(self.settings) as conn:
+            with connect(self._database_runtime) as conn:
                 conn.execute(
                     "update autonomous_tasks set status='failed', details_json=?, updated_at=? where id=?",
                     (json.dumps({"error": str(exc)}, ensure_ascii=True), now_iso(), task_id),
@@ -188,7 +243,7 @@ class AutonomousOrchestrator:
             result = scan_music(self.settings)
             return {"tracks_found": result.tracks_found, "tracks_indexed": result.tracks_indexed}
         if task_type == "repair_announcement_prebuffer":
-            with connect(self.settings) as conn:
+            with connect(self._database_runtime) as conn:
                 conn.execute(
                     "update announcement_queue set status='stale', used_at=? where status='failed'",
                     (now_iso(),),
@@ -212,7 +267,7 @@ class AutonomousOrchestrator:
         raise RuntimeError(f"unknown autonomous task: {task_type}")
 
     def maintain_long_horizon_strategy(self, track_count: int | None = None) -> dict:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             if track_count is None:
                 track_count = conn.execute("select count(*) from tracks").fetchone()[0]
             top_genres = conn.execute(
@@ -469,13 +524,13 @@ class AutonomousOrchestrator:
                 self.last_error = None
             except Exception as exc:
                 self.last_error = str(exc)
-                with connect(self.settings) as conn:
+                with connect(self._database_runtime) as conn:
                     log_event(conn, "error", "Autonomous orchestrator tick failed.", {"error": self.last_error})
                     conn.commit()
             self._stop.wait(max(1, int(self.settings.autonomy_tick_seconds)))
 
     def _metric(self, key: str) -> str | None:
-        with connect(self.settings) as conn:
+        with connect(self._database_runtime) as conn:
             row = conn.execute("select value from station_metrics where channel_id='radiotedu' and key=?", (key,)).fetchone()
         return str(row["value"]) if row else None
 

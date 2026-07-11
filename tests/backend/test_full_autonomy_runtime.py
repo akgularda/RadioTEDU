@@ -934,6 +934,37 @@ class FullAutonomyRuntimeTests(unittest.TestCase):
             self.assertIn("playlist", script)
             self.assertIn("RadioTEDU", script)
 
+    def test_liquidsoap_config_renders_measured_playout_guards(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = make_settings(Path(tmp))
+            settings.liquidsoap_queue_path = str(Path(tmp) / "liquidsoap" / "queue.m3u")
+            settings.liquidsoap_script_path = str(Path(tmp) / "liquidsoap" / "radiotedu.liq")
+
+            result = render_liquidsoap_config(settings)
+
+            self.assertEqual(
+                {
+                    "silence_threshold_dbfs": -60.0,
+                    "degraded_primary_seconds": 1.0,
+                    "fallback_seconds": 1.5,
+                    "talk_over_minimum_intro_confidence": 0.85,
+                    "talk_over_minimum_instrumental_intro_seconds": 3.0,
+                    "speech_end_before_intro_seconds": 0.5,
+                    "speech_end_before_intro_range_seconds": (0.3, 0.7),
+                    "time_stretch_ratio": 1.0,
+                    "speaks_over_vocals": False,
+                },
+                result["playout"],
+            )
+            script = Path(result["script_path"]).read_text(encoding="utf-8")
+            self.assertIn("assume_autocue=true", script)
+            self.assertIn("conservative=true", script)
+            self.assertIn("blank.detect(", script)
+            self.assertIn("max_blank=1.0", script)
+            self.assertIn("blank.skip(", script)
+            self.assertIn("max_blank=1.5", script)
+            self.assertIn("threshold=-60.0", script)
+
     def test_program_patch_updates_schedule_and_records_revision(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = make_settings(Path(tmp))

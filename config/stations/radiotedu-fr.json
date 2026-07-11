@@ -1,0 +1,31 @@
+{
+  "profile_version": 1,
+  "station_id": "radiotedu-fr",
+  "display_name": "RadioTEDU Français",
+  "language": "fr",
+  "locale": "fr-FR",
+  "timezone": "Europe/Istanbul",
+  "public": {
+    "route": "/ai/fr",
+    "compatibility_routes": [],
+    "snapshot_endpoint": "/api/public/stations/radiotedu-fr/snapshot",
+    "status_endpoint": "/api/public/stations/radiotedu-fr/status",
+    "stream_url": "https://radiotedu.com:8001/radiotedu-fr"
+  },
+  "audio": {
+    "stream_mount": "/radiotedu-fr",
+    "loudness_lufs": -16,
+    "true_peak_dbtp": -1,
+    "minimum_qwen_buffer": 5
+  },
+  "runtime": {
+    "data_root": "data/stations/radiotedu-fr",
+    "database": "data/stations/radiotedu-fr/radio.db",
+    "music_root": "media/stations/radiotedu-fr/music",
+    "announcement_root": "data/stations/radiotedu-fr/announcements",
+    "cache_root": "data/stations/radiotedu-fr/qwen-cache",
+    "log_root": "data/stations/radiotedu-fr/logs"
+  },
+  "voice_pack": "radiotedu-fr-voices-v1",
+  "snapshot_secret_ref": "RADIOTEDU_FR_SNAPSHOT_SECRET"
+}

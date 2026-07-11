@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "candidate_only": true,
+  "pack_id": "radiotedu-en-voices-v1",
+  "station_id": "radiotedu-en",
+  "language": "en",
+  "locale": "en-US",
+  "model_checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "hosts": [
+    {
+      "host_id": "maya",
+      "gender": "woman",
+      "dayparts": [
+        "morning"
+      ],
+      "styles": {
+        "station_id": "energetic_clear",
+        "track_intro": "energetic_clear",
+        "track_outro": "energetic_clear",
+        "weather": "energetic_clear",
+        "news": "energetic_clear",
+        "listener_reply": "energetic_clear",
+        "program_open": "energetic_clear",
+        "program_close": "energetic_clear"
+      },
+      "candidates": [
+        {
+          "candidate_id": "maya-a",
+          "role_instruction": "Warm bright adult woman; confident, optimistic, 150-160 words per minute; energetic without shouting",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "maya-b",
+          "role_instruction": "Warm bright adult woman; confident, optimistic, 150-160 words per minute; energetic without shouting",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "maya-c",
+          "role_instruction": "Warm bright adult woman; confident, optimistic, 150-160 words per minute; energetic without shouting",
+          "resonance": "deep"
+        }
+      ]
+    },
+    {
+      "host_id": "elliot",
+      "gender": "man",
+      "dayparts": [
+        "daytime"
+      ],
+      "styles": {
+        "station_id": "conversational_clear",
+        "track_intro": "conversational_clear",
+        "track_outro": "conversational_clear",
+        "weather": "conversational_clear",
+        "news": "conversational_clear",
+        "listener_reply": "conversational_clear",
+        "program_open": "conversational_clear",
+        "program_close": "conversational_clear"
+      },
+      "candidates": [
+        {
+          "candidate_id": "elliot-a",
+          "role_instruction": "Warm adult man; intelligent, curious, approachable, 135-145 words per minute",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "elliot-b",
+          "role_instruction": "Warm adult man; intelligent, curious, approachable, 135-145 words per minute",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "elliot-c",
+          "role_instruction": "Warm adult man; intelligent, curious, approachable, 135-145 words per minute",
+          "resonance": "deep"
+        }
+      ]
+    },
+    {
+      "host_id": "selin",
+      "gender": "woman",
+      "dayparts": [
+        "night"
+      ],
+      "styles": {
+        "station_id": "calm_intimate",
+        "track_intro": "calm_intimate",
+        "track_outro": "calm_intimate",
+        "weather": "calm_intimate",
+        "news": "calm_intimate",
+        "listener_reply": "calm_intimate",
+        "program_open": "calm_intimate",
+        "program_close": "calm_intimate"
+      },
+      "candidates": [
+        {
+          "candidate_id": "selin-a",
+          "role_instruction": "Warm adult woman; velvety, reassuring, spacious, 110-122 words per minute; never whisper",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "selin-b",
+          "role_instruction": "Warm adult woman; velvety, reassuring, spacious, 110-122 words per minute; never whisper",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "selin-c",
+          "role_instruction": "Warm adult woman; velvety, reassuring, spacious, 110-122 words per minute; never whisper",
+          "resonance": "deep"
+        }
+      ]
+    },
+    {
+      "host_id": "theo",
+      "gender": "man",
+      "dayparts": [
+        "weekend"
+      ],
+      "styles": {
+        "station_id": "relaxed_friendly",
+        "track_intro": "relaxed_friendly",
+        "track_outro": "relaxed_friendly",
+        "weather": "relaxed_friendly",
+        "news": "relaxed_friendly",
+        "listener_reply": "relaxed_friendly",
+        "program_open": "relaxed_friendly",
+        "program_close": "relaxed_friendly"
+      },
+      "candidates": [
+        {
+          "candidate_id": "theo-a",
+          "role_instruction": "Warm adult man; relaxed, eclectic, lightly playful, 128-140 words per minute",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "theo-b",
+          "role_instruction": "Warm adult man; relaxed, eclectic, lightly playful, 128-140 words per minute",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "theo-c",
+          "role_instruction": "Warm adult man; relaxed, eclectic, lightly playful, 128-140 words per minute",
+          "resonance": "deep"
+        }
+      ]
+    }
+  ]
+}

@@ -12,8 +12,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .art.cover_generator import generate_covers
-from .config import Settings, ensure_runtime_dirs
-from .database import connect, init_db, log_event, now_iso, rows_to_dicts
+from .config import Settings
+from .database import connect, log_event, now_iso, rows_to_dicts
 from .liquidsoap import liquidsoap_status, render_liquidsoap_config, start_liquidsoap, stop_liquidsoap, verify_liquidsoap_output
 from .llm import ollama_runtime_status
 from .maintenance import maintenance_summary, run_maintenance, watchdog_summary
@@ -30,27 +30,67 @@ from .public_dashboard import (
     store_public_snapshot,
 )
 from .radio_agent import RadioAgent
+from .runtime.station_runtime import SnapshotPusher, create_station_runtime
 from .scheduler import current_program, next_programs
 from .search.rss import RSSSearchProvider
 from .search.searxng import SearXNGSearchProvider
+from .stations.context import StationContext, build_station_context
+from .stations.loader import StationProfileError, load_station_profiles
 
 
 STARTED_AT = datetime.now(timezone.utc)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or Settings.from_env()
-    ensure_runtime_dirs(settings)
-    init_db(settings)
-    generate_covers(settings)
-    agent = RadioAgent(settings)
-    orchestrator = AutonomousOrchestrator(settings, agent)
-    public_snapshot_pusher = (
-        PublicSnapshotPusher(settings, agent)
-        if settings.public_sync_url and settings.public_sync_token
-        else None
+def _build_public_snapshot_pusher(
+    context: StationContext,
+    agent: RadioAgent,
+) -> SnapshotPusher | None:
+    settings = context.settings
+    if not settings.public_sync_url or not settings.public_sync_token:
+        return None
+    return PublicSnapshotPusher(settings, agent)
+
+
+def create_app(
+    settings: Settings | None = None,
+    station_context: StationContext | None = None,
+    snapshot_pusher: SnapshotPusher | None = None,
+) -> FastAPI:
+    if settings is not None and station_context is not None:
+        raise ValueError("pass settings or station_context, not both")
+
+    if station_context is not None:
+        runtime_source: Settings | StationContext = station_context
+    elif settings is not None:
+        runtime_source = settings
+    else:
+        base_settings = Settings.from_env()
+        profiles = load_station_profiles(base_settings.station_profiles_path)
+        try:
+            profile = profiles[base_settings.station_id]
+        except KeyError as exc:
+            raise StationProfileError(f"unknown STATION_ID: {base_settings.station_id}") from exc
+        runtime_source = build_station_context(base_settings, profile)
+
+    runtime_settings = (
+        runtime_source.settings
+        if isinstance(runtime_source, StationContext)
+        else runtime_source
     )
-    app = FastAPI(title="RadioTEDU")
+    generate_covers(runtime_settings)
+    runtime = create_station_runtime(
+        runtime_source,
+        snapshot_pusher=snapshot_pusher,
+        snapshot_pusher_factory=_build_public_snapshot_pusher,
+    )
+    context = runtime.context
+    settings = context.settings
+    agent = runtime.agent
+    orchestrator = runtime.orchestrator
+    public_snapshot_pusher = runtime.snapshot_pusher
+    app = FastAPI(title=context.profile.display_name)
+    app.state.station_context = context
+    app.state.runtime = runtime
     app.state.settings = settings
     app.state.agent = agent
     app.state.orchestrator = orchestrator
@@ -80,16 +120,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.on_event("startup")
     def startup() -> None:
-        if settings.autonomy_enabled:
-            orchestrator.start_background()
-        if public_snapshot_pusher:
-            public_snapshot_pusher.start_background()
+        runtime.start()
 
     @app.on_event("shutdown")
     def shutdown() -> None:
-        if public_snapshot_pusher:
-            public_snapshot_pusher.stop_background()
-        orchestrator.stop_background()
+        runtime.stop()
 
     @app.get("/api/status")
     def status() -> dict:
@@ -885,9 +920,9 @@ def health(settings: Settings, agent: RadioAgent) -> dict:
     }
 
 
-app = create_app()
+app: FastAPI | None = None
 
 
 if __name__ == "__main__":
     settings = Settings.from_env()
-    uvicorn.run("backend.app:app", host=settings.api_host, port=settings.api_port, reload=False)
+    uvicorn.run(create_app(settings), host=settings.api_host, port=settings.api_port, reload=False)

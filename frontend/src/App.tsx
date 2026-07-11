@@ -109,7 +109,7 @@ function PublicApp() {
     );
   }
 
-  return <PublicDashboard status={status} />;
+  return <PublicDashboard status={status} connectionError={error} />;
 }
 
 export default App;

@@ -1,0 +1,66 @@
+{
+  "contract_version": 1,
+  "stations": {
+    "radiotedu-en": {
+      "station_id": "radiotedu-en",
+      "service": "RadioTEDU.Station.EN",
+      "root": "data/stations/radiotedu-en",
+      "database": "data/stations/radiotedu-en/radio.db",
+      "music_root": "media/stations/radiotedu-en/music",
+      "announcement_root": "data/stations/radiotedu-en/announcements",
+      "cache_root": "data/stations/radiotedu-en/qwen-cache",
+      "log_root": "data/stations/radiotedu-en/logs",
+      "mount": "/radiotedu-en",
+      "source_credentials_ref": "RADIOTEDU_EN_SOURCE_CREDENTIALS",
+      "snapshot_secret_ref": "RADIOTEDU_EN_SNAPSHOT_SECRET",
+      "public_listener_endpoint": "https://listen.radiotedu.com/en",
+      "host_endpoints": {
+        "stream-a": {
+          "primary": "https://stream-a.radiotedu.com:8001/radiotedu-en",
+          "fallback": "https://stream-a.radiotedu.com:8001/fallback-radiotedu-en"
+        },
+        "stream-b": {
+          "primary": "https://stream-b.radiotedu.com:8001/radiotedu-en",
+          "fallback": "https://stream-b.radiotedu.com:8001/fallback-radiotedu-en"
+        }
+      }
+    },
+    "radiotedu-fr": {
+      "station_id": "radiotedu-fr",
+      "service": "RadioTEDU.Station.FR",
+      "root": "data/stations/radiotedu-fr",
+      "database": "data/stations/radiotedu-fr/radio.db",
+      "music_root": "media/stations/radiotedu-fr/music",
+      "announcement_root": "data/stations/radiotedu-fr/announcements",
+      "cache_root": "data/stations/radiotedu-fr/qwen-cache",
+      "log_root": "data/stations/radiotedu-fr/logs",
+      "mount": "/radiotedu-fr",
+      "source_credentials_ref": "RADIOTEDU_FR_SOURCE_CREDENTIALS",
+      "snapshot_secret_ref": "RADIOTEDU_FR_SNAPSHOT_SECRET",
+      "public_listener_endpoint": "https://listen.radiotedu.com/fr",
+      "host_endpoints": {
+        "stream-a": {
+          "primary": "https://stream-a.radiotedu.com:8001/radiotedu-fr",
+          "fallback": "https://stream-a.radiotedu.com:8001/fallback-radiotedu-fr"
+        },
+        "stream-b": {
+          "primary": "https://stream-b.radiotedu.com:8001/radiotedu-fr",
+          "fallback": "https://stream-b.radiotedu.com:8001/fallback-radiotedu-fr"
+        }
+      }
+    }
+  },
+  "services": {
+    "RadioTEDU.SharedAI": {
+      "owns": ["ollama", "qwen", "model_leases"],
+      "station_database": null,
+      "playout": false
+    },
+    "RadioTEDU.PublicSync": {
+      "database": "data/public-sync/public-sync.db",
+      "direction": "outbound-only",
+      "can_control_playout": false,
+      "owns": ["sanitized_station_state", "outbox"]
+    }
+  }
+}

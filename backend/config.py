@@ -26,8 +26,13 @@ def _as_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+ALLOWED_STATION_IDS = frozenset({"radiotedu-en", "radiotedu-fr"})
+
+
 @dataclass
 class Settings:
+    station_id: str = "radiotedu-en"
+    station_profiles_dir: str = "config/stations"
     database_path: str = "data/radiotedu.db"
     music_dir: str = "data/music"
     static_dir: str = "backend/static"
@@ -82,11 +87,17 @@ class Settings:
     news_interval_minutes: int = 60
     news_max_age_hours: int = 24
 
+    def __post_init__(self) -> None:
+        if self.station_id not in ALLOWED_STATION_IDS:
+            raise ValueError("station_id must be radiotedu-en or radiotedu-fr")
+
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> "Settings":
         env_file = _env_file_values(Path(env_path))
         values: dict[str, object] = {}
         key_map = {
+            "station_id": "STATION_ID",
+            "station_profiles_dir": "STATION_PROFILES_DIR",
             "database_path": "DATABASE_PATH",
             "music_dir": "MUSIC_DIR",
             "static_dir": "STATIC_DIR",
@@ -166,6 +177,10 @@ class Settings:
 
     def path(self, value: str) -> Path:
         return Path(value).expanduser()
+
+    @property
+    def station_profiles_path(self) -> Path:
+        return self.path(self.station_profiles_dir)
 
     @property
     def database_file(self) -> Path:

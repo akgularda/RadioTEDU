@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "candidate_only": true,
+  "pack_id": "radiotedu-fr-voices-v1",
+  "station_id": "radiotedu-fr",
+  "language": "fr",
+  "locale": "fr-FR",
+  "model_checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "hosts": [
+    {
+      "host_id": "camille",
+      "gender": "woman",
+      "dayparts": [
+        "morning"
+      ],
+      "styles": {
+        "station_id": "energetic_clear",
+        "track_intro": "energetic_clear",
+        "track_outro": "energetic_clear",
+        "weather": "energetic_clear",
+        "news": "energetic_clear",
+        "listener_reply": "energetic_clear",
+        "program_open": "energetic_clear",
+        "program_close": "energetic_clear"
+      },
+      "candidates": [
+        {
+          "candidate_id": "camille-a",
+          "role_instruction": "Voix de femme adulte, chaleureuse, lumineuse et énergique; 145-155 mots par minute; sans ton publicitaire",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "camille-b",
+          "role_instruction": "Voix de femme adulte, chaleureuse, lumineuse et énergique; 145-155 mots par minute; sans ton publicitaire",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "camille-c",
+          "role_instruction": "Voix de femme adulte, chaleureuse, lumineuse et énergique; 145-155 mots par minute; sans ton publicitaire",
+          "resonance": "deep"
+        }
+      ]
+    },
+    {
+      "host_id": "mathieu",
+      "gender": "man",
+      "dayparts": [
+        "daytime"
+      ],
+      "styles": {
+        "station_id": "conversational_clear",
+        "track_intro": "conversational_clear",
+        "track_outro": "conversational_clear",
+        "weather": "conversational_clear",
+        "news": "conversational_clear",
+        "listener_reply": "conversational_clear",
+        "program_open": "conversational_clear",
+        "program_close": "conversational_clear"
+      },
+      "candidates": [
+        {
+          "candidate_id": "mathieu-a",
+          "role_instruction": "Voix d'homme adulte, posée, curieuse et conversationnelle; 130-140 mots par minute",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "mathieu-b",
+          "role_instruction": "Voix d'homme adulte, posée, curieuse et conversationnelle; 130-140 mots par minute",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "mathieu-c",
+          "role_instruction": "Voix d'homme adulte, posée, curieuse et conversationnelle; 130-140 mots par minute",
+          "resonance": "deep"
+        }
+      ]
+    },
+    {
+      "host_id": "elodie",
+      "gender": "woman",
+      "dayparts": [
+        "night"
+      ],
+      "styles": {
+        "station_id": "calm_intimate",
+        "track_intro": "calm_intimate",
+        "track_outro": "calm_intimate",
+        "weather": "calm_intimate",
+        "news": "calm_intimate",
+        "listener_reply": "calm_intimate",
+        "program_open": "calm_intimate",
+        "program_close": "calm_intimate"
+      },
+      "candidates": [
+        {
+          "candidate_id": "elodie-a",
+          "role_instruction": "Voix de femme adulte, rassurante, calme et naturelle; 105-118 mots par minute; sans chuchotement",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "elodie-b",
+          "role_instruction": "Voix de femme adulte, rassurante, calme et naturelle; 105-118 mots par minute; sans chuchotement",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "elodie-c",
+          "role_instruction": "Voix de femme adulte, rassurante, calme et naturelle; 105-118 mots par minute; sans chuchotement",
+          "resonance": "deep"
+        }
+      ]
+    },
+    {
+      "host_id": "jules",
+      "gender": "man",
+      "dayparts": [
+        "weekend"
+      ],
+      "styles": {
+        "station_id": "relaxed_friendly",
+        "track_intro": "relaxed_friendly",
+        "track_outro": "relaxed_friendly",
+        "weather": "relaxed_friendly",
+        "news": "relaxed_friendly",
+        "listener_reply": "relaxed_friendly",
+        "program_open": "relaxed_friendly",
+        "program_close": "relaxed_friendly"
+      },
+      "candidates": [
+        {
+          "candidate_id": "jules-a",
+          "role_instruction": "Voix d'homme adulte, détendue, éclectique et légèrement joueuse; 120-135 mots par minute",
+          "resonance": "light"
+        },
+        {
+          "candidate_id": "jules-b",
+          "role_instruction": "Voix d'homme adulte, détendue, éclectique et légèrement joueuse; 120-135 mots par minute",
+          "resonance": "balanced"
+        },
+        {
+          "candidate_id": "jules-c",
+          "role_instruction": "Voix d'homme adulte, détendue, éclectique et légèrement joueuse; 120-135 mots par minute",
+          "resonance": "deep"
+        }
+      ]
+    }
+  ]
+}

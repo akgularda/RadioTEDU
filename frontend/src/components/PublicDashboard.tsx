@@ -5,11 +5,12 @@ import { postPublicSession, type PublicStatusResponse } from '../api';
 
 interface PublicDashboardProps {
   status: PublicStatusResponse;
+  connectionError?: string | null;
 }
 
-export function PublicDashboard({ status }: PublicDashboardProps) {
+export function PublicDashboard({ status, connectionError = null }: PublicDashboardProps) {
   const cover = status.channel.cover_path || '/static/generated/covers/radiotedu_station.png';
-  const logo = '/static/generated/covers/radiotedu_logo.png';
+  const logo = '/static/generated/covers/radiotedu_logo_source.png';
   const currentProgram = status.current_program || status.programs[0] || null;
   const sessionId = useMemo(() => getSessionId(), []);
   const [playing, setPlaying] = useState(false);
@@ -66,14 +67,14 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
       <div className="public-page">
         <header className="public-brand">
           <img className="public-logo" src={logo} alt="RadioTEDU" />
-          <div>
+          <div className="public-brand-copy">
             <strong>RadioTEDU</strong>
-            <span>AI Radio</span>
+            <span>AI Radio · Ankara</span>
           </div>
         </header>
 
         <section className="station-card public-card" aria-label="RadioTEDU public channel">
-          <img className="station-cover public-cover" src={cover} alt="" />
+          <img className="station-cover public-cover" src={cover} alt="RadioTEDU station cover" />
           <div className="station-header public-station-header">
             <div className="station-title-block">
               <h1>{status.channel.name}</h1>
@@ -86,6 +87,11 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
           </div>
 
           {status.message ? <div className="setup-banner">{status.message}</div> : null}
+          {connectionError ? (
+            <div className="public-connection-notice" role="status">
+              Live data connection interrupted. Showing the last received broadcast snapshot.
+            </div>
+          ) : null}
 
           <div className="now-playing-row public-now-playing">
             <button className="play-button" type="button" onClick={togglePlay} aria-label={playing ? 'Pause stream' : 'Play stream'} disabled={!status.stream.url}>
@@ -131,12 +137,19 @@ export function PublicDashboard({ status }: PublicDashboardProps) {
             </button>
           </div>
 
-          <ScheduleSection program={currentProgram} minutesLeft={status.current_minutes_left} nextProgram={status.next_program} />
-          <ShareCard card={status.share_card} />
-          <TopSongs songs={status.top_songs} />
-          <GenreBars genres={status.top_genres} />
-          <ContentBreakdown items={status.content_breakdown} />
-          <ActivityFeed items={status.activity} />
+          <div className="public-editorial-grid">
+            <ScheduleSection
+              program={currentProgram}
+              minutesLeft={status.current_minutes_left}
+              nextProgram={status.next_program}
+              fallbackCover={cover}
+            />
+            <ShareCard card={status.share_card} />
+            <TopSongs songs={status.top_songs} />
+            <GenreBars genres={status.top_genres} />
+            <ContentBreakdown items={status.content_breakdown} />
+            <ActivityFeed items={status.activity} />
+          </div>
         </section>
       </div>
     </main>
@@ -201,24 +214,34 @@ function ScheduleSection({
   program,
   minutesLeft,
   nextProgram,
+  fallbackCover,
 }: {
   program: PublicStatusResponse['current_program'];
   minutesLeft: number | null;
   nextProgram: PublicStatusResponse['next_program'];
+  fallbackCover: string;
 }) {
   return (
-    <section className="section-block">
+    <section className="section-block public-program-section" aria-label="Current program">
       <div className="section-heading">
-        <span>Schedule</span>
+        <span>Current Program</span>
         {program && minutesLeft !== null ? <span>{minutesLeft}m left</span> : program ? <span>{program.end_time}</span> : null}
       </div>
       {program ? (
-        <>
-          <div className="schedule-title">{program.name}</div>
-          <div className="progress-track"><span /></div>
-          <p>{program.description}</p>
-          {nextProgram ? <p className="public-up-next">Up next at {nextProgram.start_time}: {nextProgram.name}</p> : null}
-        </>
+        <div className="public-program-layout">
+          <img
+            className="public-program-cover"
+            src={program.cover_path || fallbackCover}
+            alt={`${program.name} program cover`}
+          />
+          <div className="public-program-copy">
+            <div className="schedule-title">{program.name}</div>
+            <p className="public-program-time">{program.start_time}–{program.end_time}{program.host_name ? ` · ${program.host_name}` : ''}</p>
+            <div className="progress-track"><span /></div>
+            <p>{program.description}</p>
+            {nextProgram ? <p className="public-up-next">Up next at {nextProgram.start_time}: {nextProgram.name}</p> : null}
+          </div>
+        </div>
       ) : (
         <p className="muted">Nothing scheduled</p>
       )}

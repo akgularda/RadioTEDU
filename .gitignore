@@ -6,6 +6,8 @@ __pycache__/
 *.pyc
 *.log
 .pytest_cache/
+.worktrees/
+.superpowers/
 data/radiotedu.db
 data/*.db-journal
 data/liquidsoap/queue.m3u

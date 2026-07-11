@@ -675,6 +675,19 @@ describe('PublicDashboard', () => {
 
     render(<PublicDashboard status={publicStatus} />);
 
+    expect(screen.getByRole('img', { name: 'RadioTEDU' })).toHaveAttribute(
+      'src',
+      '/static/generated/covers/radiotedu_logo_source.png',
+    );
+    expect(screen.getByRole('img', { name: 'RadioTEDU station cover' })).toHaveAttribute(
+      'src',
+      '/static/generated/covers/radiotedu_station.png',
+    );
+    expect(screen.getByRole('region', { name: 'Current program' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Jazz Lab program cover' })).toHaveAttribute(
+      'src',
+      '/static/generated/covers/night_lab.png',
+    );
     expect(screen.getByRole('heading', { name: 'RadioTEDU' })).toBeInTheDocument();
     expect(screen.getByText('Waiting for the broadcast computer to sync.')).toBeInTheDocument();
     expect(screen.getByText('Waiting for RadioTEDU broadcast.')).toBeInTheDocument();
@@ -695,6 +708,22 @@ describe('PublicDashboard', () => {
     expect(screen.queryByText(/Start|Stop|Skip|Rescan|Long-Horizon Strategy|Autonomy Ops|No logs yet/i)).toBeNull();
     expect(screen.queryByText(/support|balance|money|donation|payment|revenue|profit/i)).toBeNull();
     expect(screen.queryByText(/OpenAIR|Grok and Roll|Backlink Broadcast|Thinking Frequencies/i)).toBeNull();
+  });
+
+  it('keeps the last broadcast snapshot visible when live polling is interrupted', () => {
+    render(
+      <PublicDashboard
+        status={publicStatus}
+        connectionError="Public status request failed: 503"
+      />,
+    );
+
+    expect(screen.getByText('Blue Room')).toBeInTheDocument();
+    expect(screen.getAllByText('Jazz Lab').length).toBeGreaterThan(0);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Live data connection interrupted. Showing the last received broadcast snapshot.',
+    );
+    expect(screen.queryByText('Public status request failed: 503')).toBeNull();
   });
 
   it('acknowledges copying the stream link when Clipboard API is unavailable', async () => {
