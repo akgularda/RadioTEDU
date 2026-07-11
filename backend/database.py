@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable, Sequence
 
 from .config import Settings, ensure_runtime_dirs
 from .stations.context import StationContext, coerce_station_context, ensure_station_runtime_dirs
@@ -18,6 +20,61 @@ CHANNEL_DESCRIPTIONS = {
     "en": "Local AI radio running on your machine.",
     "fr": "Radio IA locale en français diffusée depuis votre ordinateur.",
 }
+
+
+SCHEMA_MIGRATIONS_SCHEMA = """
+create table if not exists schema_migrations (
+    version integer primary key,
+    name text not null unique,
+    checksum text not null,
+    applied_at text not null
+)
+"""
+
+
+class MigrationError(RuntimeError):
+    """Raised when a database cannot be safely migrated."""
+
+
+@dataclass(frozen=True)
+class TableContract:
+    name: str
+    columns: tuple[tuple[str, str, int, str | None, int], ...]
+    unique_indexes: frozenset[tuple[str, ...]]
+    foreign_keys: frozenset[tuple[str, str, str, str, str, str]]
+
+
+@dataclass(frozen=True)
+class Migration:
+    version: int
+    name: str
+    sql: str
+    required_columns: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = ()
+    schema_contract: tuple[TableContract, ...] = ()
+    migration_step: Callable[[sqlite3.Connection], None] | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
+    operation_name: str = ""
+    checksum: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.version, int) or isinstance(self.version, bool) or self.version < 1:
+            raise MigrationError("migration version must be a positive integer")
+        if not self.name or not self.name.strip():
+            raise MigrationError("migration name must not be empty")
+        if not self.sql.strip():
+            raise MigrationError(f"migration {self.version} has no SQL")
+        if self.migration_step is not None and not self.operation_name.strip():
+            raise MigrationError(f"migration {self.version} operation requires a stable name")
+        checksum_source = self.sql
+        if self.operation_name:
+            checksum_source = f"{checksum_source}\n-- operation: {self.operation_name}\n"
+        expected_checksum = hashlib.sha256(checksum_source.encode("utf-8")).hexdigest()
+        if self.checksum and self.checksum != expected_checksum:
+            raise MigrationError(f"migration {self.version} checksum does not match its SQL")
+        object.__setattr__(self, "checksum", expected_checksum)
 
 
 PROGRAMS = [
@@ -115,6 +172,184 @@ def connect(runtime: Runtime):
         conn.close()
 
 
+def _ordered_migrations(migrations: Sequence[Migration]) -> tuple[Migration, ...]:
+    versions: set[int] = set()
+    names: set[str] = set()
+    for migration in migrations:
+        if migration.version in versions:
+            raise MigrationError(f"duplicate migration version {migration.version}")
+        if migration.name in names:
+            raise MigrationError(f"duplicate migration name {migration.name}")
+        versions.add(migration.version)
+        names.add(migration.name)
+    return tuple(sorted(migrations, key=lambda migration: migration.version))
+
+
+def _validate_migration_ledger(conn: sqlite3.Connection) -> None:
+    columns = {
+        row[1]: row
+        for row in conn.execute("pragma table_info(schema_migrations)").fetchall()
+    }
+    expected_types = {
+        "version": "integer",
+        "name": "text",
+        "checksum": "text",
+        "applied_at": "text",
+    }
+    if set(columns) != set(expected_types):
+        raise MigrationError("incompatible schema_migrations table")
+    for name, expected_type in expected_types.items():
+        column = columns.get(name)
+        if column is None or str(column[2]).casefold() != expected_type:
+            raise MigrationError("incompatible schema_migrations table")
+    if columns["version"][5] != 1:
+        raise MigrationError("incompatible schema_migrations table")
+    if any(not columns[name][3] for name in ("name", "checksum", "applied_at")):
+        raise MigrationError("incompatible schema_migrations table")
+
+    unique_name_index = False
+    for index in conn.execute("pragma index_list(schema_migrations)").fetchall():
+        if not index[2]:
+            continue
+        index_name = str(index[1]).replace('"', '""')
+        indexed_columns = [
+            row[2]
+            for row in conn.execute(f'pragma index_info("{index_name}")').fetchall()
+        ]
+        if indexed_columns == ["name"]:
+            unique_name_index = True
+            break
+    if not unique_name_index:
+        raise MigrationError("incompatible schema_migrations table")
+
+
+def _ensure_migration_ledger(conn: sqlite3.Connection) -> None:
+    conn.execute(SCHEMA_MIGRATIONS_SCHEMA)
+    _validate_migration_ledger(conn)
+
+
+def _sql_statements(sql: str, version: int) -> Iterable[str]:
+    statement = ""
+    for line in sql.splitlines(keepends=True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            completed = statement.strip()
+            if completed:
+                yield completed
+            statement = ""
+    if statement.strip():
+        raise MigrationError(f"migration {version} has incomplete SQL")
+
+
+def _validate_required_columns(conn: sqlite3.Connection, migration: Migration) -> None:
+    for table, expected_columns in migration.required_columns:
+        quoted_table = table.replace('"', '""')
+        actual_columns = {
+            row[1]: str(row[2]).casefold()
+            for row in conn.execute(f'pragma table_info("{quoted_table}")').fetchall()
+        }
+        for column, expected_type in expected_columns:
+            if actual_columns.get(column) != expected_type:
+                raise MigrationError(
+                    f"incompatible schema for migration {migration.version}: {table}.{column}"
+                )
+
+
+def _table_contract(conn: sqlite3.Connection, table: str) -> TableContract:
+    quoted_table = table.replace('"', '""')
+    columns = tuple(
+        (row[1], str(row[2]).casefold(), int(row[3]), row[4], int(row[5]))
+        for row in conn.execute(f'pragma table_info("{quoted_table}")').fetchall()
+    )
+    unique_indexes: set[tuple[str, ...]] = set()
+    for index in conn.execute(f'pragma index_list("{quoted_table}")').fetchall():
+        if not index[2]:
+            continue
+        index_name = str(index[1]).replace('"', '""')
+        unique_indexes.add(
+            tuple(row[2] for row in conn.execute(f'pragma index_info("{index_name}")').fetchall())
+        )
+    foreign_keys = frozenset(
+        (row[2], row[3], row[4], row[5], row[6], row[7])
+        for row in conn.execute(f'pragma foreign_key_list("{quoted_table}")').fetchall()
+    )
+    return TableContract(table, columns, frozenset(unique_indexes), foreign_keys)
+
+
+def _validate_schema_contract(conn: sqlite3.Connection, migration: Migration) -> None:
+    for expected in migration.schema_contract:
+        actual = _table_contract(conn, expected.name)
+        actual_columns = {column[0]: column[1:] for column in actual.columns}
+        for column in expected.columns:
+            if actual_columns.get(column[0]) != column[1:]:
+                raise MigrationError(
+                    f"incompatible schema for migration {migration.version}: {expected.name}.{column[0]}"
+                )
+        if not expected.unique_indexes <= actual.unique_indexes:
+            raise MigrationError(f"incompatible schema for migration {migration.version}: {expected.name}")
+        if not expected.foreign_keys <= actual.foreign_keys:
+            raise MigrationError(f"incompatible schema for migration {migration.version}: {expected.name}")
+
+
+def _validate_migration_schema(conn: sqlite3.Connection, migration: Migration) -> None:
+    _validate_required_columns(conn, migration)
+    _validate_schema_contract(conn, migration)
+
+
+def _rollback(conn: sqlite3.Connection) -> None:
+    if conn.in_transaction:
+        conn.execute("rollback")
+
+
+def apply_migrations(
+    conn: sqlite3.Connection, migrations: Sequence[Migration] | None = None
+) -> None:
+    """Apply numbered migrations exactly once, recording checksums atomically."""
+
+    if conn.in_transaction:
+        raise MigrationError("migration runner requires an idle connection")
+    ordered = _ordered_migrations(DEFAULT_MIGRATIONS if migrations is None else migrations)
+    _ensure_migration_ledger(conn)
+    known_versions = {migration.version for migration in ordered}
+
+    for migration in ordered:
+        try:
+            conn.execute("begin immediate")
+            applied = {
+                row[0]: (row[1], row[2])
+                for row in conn.execute("select version, name, checksum from schema_migrations")
+            }
+            unknown_versions = sorted(set(applied) - known_versions)
+            if unknown_versions:
+                raise MigrationError(f"database contains unknown migration version {unknown_versions[0]}")
+            checkpoint = applied.get(migration.version)
+            if checkpoint is not None:
+                name, checksum = checkpoint
+                if name != migration.name:
+                    raise MigrationError(f"migration name drift for version {migration.version}")
+                if checksum != migration.checksum:
+                    raise MigrationError(f"migration checksum drift for version {migration.version}")
+                _validate_migration_schema(conn, migration)
+                conn.execute("commit")
+                continue
+            for statement in _sql_statements(migration.sql, migration.version):
+                conn.execute(statement)
+            if migration.migration_step is not None:
+                migration.migration_step(conn)
+            _validate_migration_schema(conn, migration)
+            conn.execute(
+                "insert into schema_migrations(version, name, checksum, applied_at) values (?, ?, ?, ?)",
+                (migration.version, migration.name, migration.checksum, now_iso()),
+            )
+            conn.execute("commit")
+        except MigrationError:
+            _rollback(conn)
+            raise
+        except Exception as error:
+            _rollback(conn)
+            raise MigrationError(f"migration {migration.version} failed: {error}") from error
+
+
 def init_db(runtime: Runtime) -> None:
     context = coerce_station_context(runtime)
     if isinstance(runtime, StationContext):
@@ -122,9 +357,8 @@ def init_db(runtime: Runtime) -> None:
     else:
         ensure_runtime_dirs(context.settings)
     with connect(context if isinstance(runtime, StationContext) else runtime) as conn:
-        conn.executescript(SCHEMA)
+        apply_migrations(conn)
         conn.execute("drop table if exists donations")
-        migrate_program_columns(conn)
         seed_channel(conn, context)
         seed_programs(conn, context)
         conn.commit()
@@ -202,7 +436,7 @@ def seed_programs(conn: sqlite3.Connection, context: StationContext) -> None:
 
 
 def migrate_program_columns(conn: sqlite3.Connection) -> None:
-    existing = {row["name"] for row in conn.execute("pragma table_info(programs)").fetchall()}
+    existing = {row[1] for row in conn.execute("pragma table_info(programs)").fetchall()}
     additions = {
         "host_name": "text",
         "host_gender": "text",
@@ -410,3 +644,54 @@ create index if not exists idx_autonomous_tasks_status on autonomous_tasks(statu
 create index if not exists idx_public_snapshots_received_at on public_snapshots(received_at);
 create index if not exists idx_public_listener_sessions_seen on public_listener_sessions(last_seen_at, ended_at);
 """
+
+
+def _schema_column_requirements(
+    schema: str,
+) -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]:
+    requirements: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+    for statement in _sql_statements(schema, 1):
+        lowered = statement.casefold()
+        if not lowered.startswith("create table if not exists "):
+            continue
+        prefix, body = statement.split("(", 1)
+        table = prefix.split()[-1].strip('"`[]')
+        columns: list[tuple[str, str]] = []
+        for definition in body.rsplit(")", 1)[0].splitlines():
+            normalized = definition.strip().rstrip(",")
+            if normalized.casefold().startswith(
+                ("check", "constraint", "foreign", "primary", "unique")
+            ):
+                continue
+            parts = normalized.split()
+            if len(parts) < 2:
+                continue
+            columns.append((parts[0].strip('"`[]'), parts[1].casefold()))
+        requirements.append((table, tuple(columns)))
+    return tuple(requirements)
+
+
+def _schema_contract(schema: str) -> tuple[TableContract, ...]:
+    with sqlite3.connect(":memory:") as conn:
+        for statement in _sql_statements(schema, 1):
+            conn.execute(statement)
+        tables = [
+            row[0]
+            for row in conn.execute(
+                "select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name"
+            ).fetchall()
+        ]
+        return tuple(_table_contract(conn, table) for table in tables)
+
+
+DEFAULT_MIGRATIONS = (
+    Migration(
+        1,
+        "initial_station_schema",
+        SCHEMA,
+        required_columns=_schema_column_requirements(SCHEMA),
+        schema_contract=_schema_contract(SCHEMA),
+        migration_step=migrate_program_columns,
+        operation_name="migrate_program_columns_v1",
+    ),
+)
