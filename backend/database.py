@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -84,20 +85,21 @@ def now_iso() -> str:
 
 
 def _casefolded_resolved_path(path: Path) -> Path:
-    return Path(str(path.expanduser().resolve()).casefold())
+    return Path(os.path.normcase(str(path.expanduser().resolve())))
 
 
 def _validated_station_database_file(context: StationContext) -> Path:
     expected_database = context.settings.path(context.profile.runtime.database)
     expected_data_root = context.settings.path(context.profile.runtime.data_root)
+    actual_database = context.settings.database_file.expanduser().resolve()
     expected_normalized = _casefolded_resolved_path(expected_database)
     data_root_normalized = _casefolded_resolved_path(expected_data_root)
-    actual_normalized = _casefolded_resolved_path(context.settings.database_file)
+    actual_normalized = _casefolded_resolved_path(actual_database)
     if data_root_normalized not in expected_normalized.parents:
         raise ValueError("station profile database path containment escape")
     if actual_normalized != expected_normalized:
         raise ValueError("station context database path mismatch")
-    return context.settings.database_file.resolve()
+    return actual_database
 
 
 @contextmanager

@@ -1,6 +1,8 @@
+import os
 from dataclasses import replace
 from datetime import datetime as RealDateTime
 from pathlib import Path
+from unittest.mock import PropertyMock
 
 import pytest
 
@@ -122,6 +124,52 @@ def test_connect_rejects_profile_database_escape_before_sqlite(tmp_path: Path, m
 
     assert opened == []
     assert not escaped_database.exists()
+
+
+def test_connect_opens_the_same_database_path_snapshot_that_was_validated(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    stations = contexts(tmp_path)
+    english = stations["radiotedu-en"]
+    validated_database = english.settings.path(english.profile.runtime.database).resolve()
+    foreign_database = stations["radiotedu-fr"].database_file
+    database_file = PropertyMock(side_effect=[validated_database, foreign_database])
+    monkeypatch.setattr(Settings, "database_file", database_file)
+    opened: list[Path] = []
+
+    class RecordingConnection:
+        row_factory = None
+
+        def execute(self, statement: str):
+            assert statement == "pragma foreign_keys = on"
+
+        def close(self) -> None:
+            pass
+
+    def recording_sqlite_connect(path):
+        opened.append(path)
+        return RecordingConnection()
+
+    monkeypatch.setattr(database_module.sqlite3, "connect", recording_sqlite_connect)
+
+    with connect(english):
+        pass
+
+    assert database_file.call_count == 1
+    assert opened == [validated_database]
+
+
+def test_database_path_normalization_follows_platform_case_rules(tmp_path: Path) -> None:
+    upper_case_path = tmp_path / "Station" / "radio.db"
+    lower_case_path = tmp_path / "station" / "radio.db"
+    platform_aliases_paths = os.path.normcase(str(upper_case_path.resolve())) == os.path.normcase(
+        str(lower_case_path.resolve())
+    )
+
+    normalized_paths_are_equal = database_module._casefolded_resolved_path(
+        upper_case_path
+    ) == database_module._casefolded_resolved_path(lower_case_path)
+
+    assert normalized_paths_are_equal is platform_aliases_paths
 
 
 def test_connect_closes_connection_when_setup_fails(monkeypatch) -> None:
