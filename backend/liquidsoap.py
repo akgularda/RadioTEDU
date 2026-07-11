@@ -13,8 +13,140 @@ from .audio.processing import ProcessingProfile
 from .config import Settings
 
 
+_STATION_LIQUIDSOAP = {
+    "radiotedu-en": {
+        "mount": "/radiotedu-en",
+        "credentials_environment": "RADIOTEDU_EN_SOURCE_CREDENTIALS",
+    },
+    "radiotedu-fr": {
+        "mount": "/radiotedu-fr",
+        "credentials_environment": "RADIOTEDU_FR_SOURCE_CREDENTIALS",
+    },
+}
+
+
 def liquidsoap_pid_path(settings: Settings) -> Path:
     return Path(settings.liquidsoap_script_path).with_suffix(".pid")
+
+
+def liquidsoap_log_paths(settings: Settings) -> dict[str, Path]:
+    script_path = Path(settings.liquidsoap_script_path)
+    return {
+        "stdout": script_path.with_suffix(".out.log"),
+        "stderr": script_path.with_suffix(".err.log"),
+    }
+
+
+def station_liquidsoap_template_path(station_id: str) -> Path:
+    if station_id not in _STATION_LIQUIDSOAP:
+        raise ValueError(f"unsupported station Liquidsoap template: {station_id}")
+    return (
+        Path(__file__).resolve().parents[1]
+        / "config"
+        / "deployment"
+        / "liquidsoap"
+        / f"{station_id}.liq.template"
+    )
+
+
+def _station_template(settings: Settings) -> tuple[dict[str, str], Path] | None:
+    station = _STATION_LIQUIDSOAP.get(settings.station_id)
+    script_path = Path(settings.liquidsoap_script_path)
+    mount = settings.liquidsoap_mount if settings.liquidsoap_mount.startswith("/") else f"/{settings.liquidsoap_mount}"
+    if station is None or mount != station["mount"] or script_path.stem != settings.station_id:
+        return None
+    return station, station_liquidsoap_template_path(settings.station_id)
+
+
+def _processing_block(processing_profile: ProcessingProfile) -> str:
+    return f"""# Measured playout guards: T17 transition decisions are cue-aware.  Generic
+# crossfades remain zero-length unless a decision supplies liq_cross_duration,
+# so speech, jingles, and unverified intros stay sequential.
+radio = crossfade(
+  duration=0.0,
+  fade_in=0.0,
+  fade_out=0.0,
+  smart=true,
+  conservative=true,
+  assume_autocue=true,
+  radio
+)
+
+# A continuous source below -60 dBFS is degraded after 1.0 second and skipped
+# at 1.5 seconds, allowing the next queued music/fallback item to take over.
+radio = blank.detect(
+  max_blank=1.0,
+  min_noise=0.05,
+  threshold=-60.0,
+  track_sensitive=false,
+  fun () -> log("RadioTEDU primary source degraded after 1.0s below -60 dBFS"),
+  radio
+)
+radio = blank.skip(
+  threshold=-60.0,
+  max_blank=1.5,
+  min_noise=0.05,
+  track_sensitive=false,
+  radio
+)
+
+# input level control
+radio = amplify({processing_profile.input_gain_factor:.6f}, radio)
+
+# gentle wideband AGC
+radio = normalize(target={processing_profile.target_lufs:.1f}, lufs=true, gain_min=-{processing_profile.wideband_agc_max_gain_db:.1f}, gain_max={processing_profile.wideband_agc_max_gain_db:.1f}, radio)
+
+# restrained multiband dynamics
+radio = compress.multiband(radio, [
+  {{frequency=250., attack=25., release=250., ratio={processing_profile.multiband_ratio:.1f}, threshold=-18., gain=0.}},
+  {{frequency=2500., attack=20., release=200., ratio={processing_profile.multiband_ratio:.1f}, threshold=-16., gain=0.}},
+  {{frequency=12000., attack=15., release=150., ratio={processing_profile.multiband_ratio:.1f}, threshold=-14., gain=0.}}
+])
+
+# final true-peak limiter
+radio = limit(threshold={processing_profile.true_peak_ceiling_dbtp:.1f}, radio)"""
+
+
+def _render_station_template(
+    template_path: Path,
+    station: dict[str, str],
+    queue_path: Path,
+    fallback_queue_path: Path,
+    settings: Settings,
+    processing_profile: ProcessingProfile,
+) -> tuple[str, dict[str, object]]:
+    template = template_path.read_text(encoding="utf-8")
+    credentials_environment = station["credentials_environment"]
+    if f'environment.get("{credentials_environment}")' not in template:
+        raise ValueError(f"station template must reference {credentials_environment}")
+    logs = liquidsoap_log_paths(settings)
+    source_ids = {
+        "primary": f"{settings.station_id}-primary",
+        "fallback": f"{settings.station_id}-fallback",
+    }
+    replacements = {
+        "queue_path": queue_path.as_posix(),
+        "fallback_queue_path": fallback_queue_path.as_posix(),
+        "primary_source_id": source_ids["primary"],
+        "fallback_source_id": source_ids["fallback"],
+        "log_path": logs["stdout"].as_posix(),
+        "host": settings.liquidsoap_host,
+        "port": str(settings.liquidsoap_port),
+        "mount": station["mount"],
+        "processing": _processing_block(processing_profile),
+    }
+    for key, value in replacements.items():
+        template = template.replace(f"{{{{{key}}}}}", value)
+    if "{{" in template or "}}" in template:
+        raise ValueError(f"unresolved placeholder in station Liquidsoap template: {template_path}")
+    return template, {
+        "station_id": settings.station_id,
+        "fallback_queue_path": str(fallback_queue_path),
+        "pid_path": str(liquidsoap_pid_path(settings)),
+        "log_paths": {name: str(path) for name, path in logs.items()},
+        "credentials_environment": credentials_environment,
+        "source_ids": source_ids,
+    }
 
 
 def render_liquidsoap_config(
@@ -42,7 +174,24 @@ def render_liquidsoap_config(
         "time_stretch_ratio": 1.0,
         "speaks_over_vocals": False,
     }
-    script = f"""# RadioTEDU Liquidsoap configuration
+    station_template = _station_template(settings)
+    station_rendered: dict[str, object] = {}
+    if station_template:
+        station, template_path = station_template
+        fallback_queue_path = queue_path.with_name("fallback.m3u")
+        if not fallback_queue_path.exists():
+            fallback_queue_path.write_text("", encoding="utf-8")
+        script, station_rendered = _render_station_template(
+            template_path,
+            station,
+            queue_path,
+            fallback_queue_path,
+            settings,
+            processing_profile,
+        )
+        mount = station["mount"]
+    else:
+        script = f"""# RadioTEDU Liquidsoap configuration
 set("log.stdout", true)
 set("server.telnet", false)
 
@@ -117,6 +266,7 @@ output.icecast(
         "icecast_url": f"http://{settings.liquidsoap_host}:{settings.liquidsoap_port}{mount}",
         "processing_profile": processing_profile.name,
         "playout": playout,
+        **station_rendered,
     }
 
 

@@ -56,15 +56,15 @@ class RecordingPusher:
         return {"running": False}
 
 
-def station_context(tmp_path: Path):
+def station_context(tmp_path: Path, station_id: str = "radiotedu-en"):
     project_root = Path(__file__).resolve().parents[2]
-    profile = load_station_profiles(project_root / "config" / "stations")["radiotedu-en"]
-    data_root = tmp_path / "data" / "stations" / "radiotedu-en"
+    profile = load_station_profiles(project_root / "config" / "stations")[station_id]
+    data_root = tmp_path / "data" / "stations" / station_id
     runtime = replace(
         profile.runtime,
         data_root=str(data_root),
         database=str(data_root / "radio.db"),
-        music_root=str(tmp_path / "media" / "stations" / "radiotedu-en" / "music"),
+        music_root=str(tmp_path / "media" / "stations" / station_id / "music"),
         announcement_root=str(data_root / "announcements"),
         cache_root=str(data_root / "cache"),
         log_root=str(data_root / "logs"),
@@ -134,3 +134,41 @@ def test_app_delegates_public_state_lifecycle_to_its_station_runtime(tmp_path: P
 
     assert pusher.starts == 1
     assert pusher.stops == 1
+
+
+def test_station_liquidsoap_templates_keep_en_and_fr_runtime_artifacts_isolated(tmp_path: Path) -> None:
+    from backend.liquidsoap import render_liquidsoap_config
+
+    en = render_liquidsoap_config(station_context(tmp_path, "radiotedu-en").settings)
+    fr = render_liquidsoap_config(station_context(tmp_path, "radiotedu-fr").settings)
+
+    assert en["mount"] == "/radiotedu-en"
+    assert fr["mount"] == "/radiotedu-fr"
+    assert en["credentials_environment"] == "RADIOTEDU_EN_SOURCE_CREDENTIALS"
+    assert fr["credentials_environment"] == "RADIOTEDU_FR_SOURCE_CREDENTIALS"
+    assert en["source_ids"] == {
+        "primary": "radiotedu-en-primary",
+        "fallback": "radiotedu-en-fallback",
+    }
+    assert fr["source_ids"] == {
+        "primary": "radiotedu-fr-primary",
+        "fallback": "radiotedu-fr-fallback",
+    }
+
+    for selector in ("queue_path", "fallback_queue_path", "script_path", "pid_path"):
+        assert en[selector] != fr[selector]
+    assert set(en["log_paths"].values()).isdisjoint(fr["log_paths"].values())
+
+    for rendered in (en, fr):
+        script = Path(rendered["script_path"]).read_text(encoding="utf-8")
+        assert rendered["credentials_environment"] in script
+        assert "environment.get(" in script
+        assert "hackme" not in script
+        assert Path(rendered["queue_path"]).as_posix() in script
+        assert Path(rendered["fallback_queue_path"]).as_posix() in script
+        for source_id in rendered["source_ids"].values():
+            assert source_id in script
+        assert "crossfade(" in script
+        assert "blank.detect(" in script
+        assert "blank.skip(" in script
+        assert Path(rendered["fallback_queue_path"]).exists()

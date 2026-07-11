@@ -1,0 +1,24 @@
+# RadioTEDU English station Liquidsoap configuration
+set("log.stdout", true)
+set("log.file.path", "{{log_path}}")
+set("server.telnet", false)
+
+source_password = environment.get("RADIOTEDU_EN_SOURCE_CREDENTIALS")
+primary = playlist(id="{{primary_source_id}}", mode="normal", reload=1, reload_mode="watch", "{{queue_path}}")
+fallback_input = playlist(id="{{fallback_source_id}}", mode="normal", reload=1, reload_mode="watch", "{{fallback_queue_path}}")
+radio = fallback(track_sensitive=false, [primary, fallback_input])
+radio = mksafe(radio)
+
+{{processing}}
+
+output.icecast(
+  %mp3,
+  host="{{host}}",
+  port={{port}},
+  password=source_password,
+  mount="{{mount}}",
+  name="RadioTEDU English",
+  description="RadioTEDU English AI radio",
+  genre="AI Radio",
+  radio
+)
