@@ -2,6 +2,9 @@ from dataclasses import replace
 from datetime import datetime as RealDateTime
 from pathlib import Path
 
+import pytest
+
+import backend.database as database_module
 import backend.scheduler as scheduler_module
 from backend.config import Settings
 from backend.database import connect, init_db
@@ -46,15 +49,101 @@ def test_station_databases_do_not_share_program_state(tmp_path: Path, monkeypatc
             "update programs set name=? where id=? and channel_id=?",
             ("English-only edit", "morning_signal", DATABASE_CHANNEL_ID),
         )
+        conn.execute(
+            "insert into listener_events (channel_id, event_type, created_at, metadata_json) values (?, ?, ?, ?)",
+            (DATABASE_CHANNEL_ID, "english-only-event", "2026-07-11T00:00:00+00:00", "{}"),
+        )
         conn.commit()
     with connect(stations["radiotedu-fr"]) as conn:
+        conn.execute(
+            "insert into listener_events (channel_id, event_type, created_at, metadata_json) values (?, ?, ?, ?)",
+            (DATABASE_CHANNEL_ID, "french-only-event", "2026-07-11T00:00:00+00:00", "{}"),
+        )
+        conn.commit()
         name = conn.execute(
             "select name from programs where id=? and channel_id=?",
             ("morning_signal", DATABASE_CHANNEL_ID),
         ).fetchone()[0]
+        french_events = [row[0] for row in conn.execute("select event_type from listener_events order by id")]
+    with connect(stations["radiotedu-en"]) as conn:
+        english_events = [row[0] for row in conn.execute("select event_type from listener_events order by id")]
 
     assert name != "English-only edit"
+    assert english_events == ["english-only-event"]
+    assert french_events == ["french-only-event"]
     assert stations["radiotedu-en"].database_file != stations["radiotedu-fr"].database_file
+
+
+def test_connect_rejects_cross_station_database_path_before_sqlite(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    stations = contexts(tmp_path)
+    english = stations["radiotedu-en"]
+    french = stations["radiotedu-fr"]
+    expected_english_database = english.settings.path(english.profile.runtime.database).resolve()
+    french_database = french.database_file
+    english.settings.database_path = str(french_database)
+    opened: list[object] = []
+
+    def forbidden_sqlite_connect(*args, **kwargs):
+        opened.append((args, kwargs))
+        raise AssertionError("sqlite3.connect must not be called")
+
+    monkeypatch.setattr(database_module.sqlite3, "connect", forbidden_sqlite_connect)
+
+    with pytest.raises(ValueError, match="database path mismatch"):
+        with connect(english):
+            pass
+
+    assert opened == []
+    assert not expected_english_database.exists()
+    assert not french_database.exists()
+
+
+def test_connect_rejects_profile_database_escape_before_sqlite(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    context = contexts(tmp_path)["radiotedu-en"]
+    escaped_database = tmp_path / "outside.db"
+    escaped_profile = replace(
+        context.profile,
+        runtime=replace(context.profile.runtime, database=str(escaped_database)),
+    )
+    escaped_context = build_station_context(context.settings, escaped_profile)
+    opened: list[object] = []
+
+    def forbidden_sqlite_connect(*args, **kwargs):
+        opened.append((args, kwargs))
+        raise AssertionError("sqlite3.connect must not be called")
+
+    monkeypatch.setattr(database_module.sqlite3, "connect", forbidden_sqlite_connect)
+
+    with pytest.raises(ValueError, match="escape"):
+        with connect(escaped_context):
+            pass
+
+    assert opened == []
+    assert not escaped_database.exists()
+
+
+def test_connect_closes_connection_when_setup_fails(monkeypatch) -> None:
+    class SetupFailingConnection:
+        row_factory = None
+        closed = False
+
+        def execute(self, statement: str):
+            assert statement == "pragma foreign_keys = on"
+            raise RuntimeError("pragma setup failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = SetupFailingConnection()
+    monkeypatch.setattr(database_module.sqlite3, "connect", lambda path: connection)
+
+    with pytest.raises(RuntimeError, match="pragma setup failed"):
+        with connect(Settings(database_path="ignored.db")):
+            pass
+
+    assert connection.closed is True
 
 
 def test_station_channel_seed_uses_profile_identity(tmp_path: Path, monkeypatch) -> None:

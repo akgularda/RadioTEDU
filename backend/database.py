@@ -4,6 +4,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable
 
 from .config import Settings, ensure_runtime_dirs
@@ -82,13 +83,31 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _casefolded_resolved_path(path: Path) -> Path:
+    return Path(str(path.expanduser().resolve()).casefold())
+
+
+def _validated_station_database_file(context: StationContext) -> Path:
+    expected_database = context.settings.path(context.profile.runtime.database)
+    expected_data_root = context.settings.path(context.profile.runtime.data_root)
+    expected_normalized = _casefolded_resolved_path(expected_database)
+    data_root_normalized = _casefolded_resolved_path(expected_data_root)
+    actual_normalized = _casefolded_resolved_path(context.settings.database_file)
+    if data_root_normalized not in expected_normalized.parents:
+        raise ValueError("station profile database path containment escape")
+    if actual_normalized != expected_normalized:
+        raise ValueError("station context database path mismatch")
+    return context.settings.database_file.resolve()
+
+
 @contextmanager
 def connect(runtime: Runtime):
     context = coerce_station_context(runtime)
-    conn = sqlite3.connect(context.database_file)
-    conn.row_factory = sqlite3.Row
-    conn.execute("pragma foreign_keys = on")
+    database = _validated_station_database_file(context) if isinstance(runtime, StationContext) else runtime.database_path
+    conn = sqlite3.connect(database)
     try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("pragma foreign_keys = on")
         yield conn
     finally:
         conn.close()
@@ -100,7 +119,7 @@ def init_db(runtime: Runtime) -> None:
         ensure_station_runtime_dirs(context)
     else:
         ensure_runtime_dirs(context.settings)
-    with connect(context) as conn:
+    with connect(context if isinstance(runtime, StationContext) else runtime) as conn:
         conn.executescript(SCHEMA)
         conn.execute("drop table if exists donations")
         migrate_program_columns(conn)
