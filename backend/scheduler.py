@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Iterable
 from zoneinfo import ZoneInfo
 
 from .config import Settings
 from .database import DATABASE_CHANNEL_ID, PROGRAMS, connect, rows_to_dicts
+from .programming.clocks import ProgramClock
+from .programming.logs import (
+    ImagingLogCandidate,
+    MusicLogCandidate,
+    SevenDayLogGenerator,
+    SevenDayStationLog,
+)
 from .stations.context import StationContext, coerce_station_context
 
 
@@ -57,3 +65,28 @@ def next_programs(runtime: Settings | StationContext | None = None, limit: int =
     context = coerce_station_context(runtime) if runtime is not None else None
     programs = _programs_from_db(context) if context else [dict(program) for program in PROGRAMS]
     return [dict(program) for program in programs[:limit]]
+
+
+def generate_station_qualification_log(
+    station_id: str,
+    clock: ProgramClock,
+    first_boundary_at: datetime,
+    music_candidates: Iterable[MusicLogCandidate],
+    imaging_candidates: Iterable[ImagingLogCandidate],
+    *,
+    generator: SevenDayLogGenerator | None = None,
+) -> SevenDayStationLog:
+    """Generate an isolated, deterministic seven-day scheduling fixture.
+
+    This is a qualification helper only: it neither starts playout nor claims
+    to observe live broadcasting.  The supplied inventories remain entirely
+    station-local and are checked by the generator before a log is returned.
+    """
+
+    return (generator or SevenDayLogGenerator()).generate(
+        station_id,
+        clock,
+        first_boundary_at,
+        music_candidates,
+        imaging_candidates,
+    )
