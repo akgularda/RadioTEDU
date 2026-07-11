@@ -1,9 +1,17 @@
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 import json
 from pathlib import Path
 
 import pytest
 
+from backend.config import Settings
+from backend.stations.context import (
+    StationContext,
+    build_station_context,
+    coerce_station_context,
+    english_compatibility_context,
+    ensure_station_runtime_dirs,
+)
 from backend.stations.loader import StationProfileError, load_station_profile, load_station_profiles
 from backend.stations.models import AudioProfile, PublicProfile, RuntimeProfile, StationProfile
 
@@ -43,6 +51,115 @@ def test_station_profile_is_nested_and_immutable() -> None:
     assert profile.audio.minimum_qwen_buffer == 5
     with pytest.raises(FrozenInstanceError):
         profile.display_name = "changed"  # type: ignore[misc]
+
+
+def test_context_derives_station_scoped_settings() -> None:
+    profiles = load_station_profiles("config/stations")
+    settings = Settings()
+
+    context = build_station_context(settings, profiles["radiotedu-fr"])
+
+    assert context.profile.station_id == "radiotedu-fr"
+    assert context.settings is not settings
+    assert settings.database_path == "data/radiotedu.db"
+    assert context.settings.database_path.endswith("data/stations/radiotedu-fr/radio.db")
+    assert context.settings.liquidsoap_mount == "/radiotedu-fr"
+    assert context.announcement_root != context.cache_root
+
+
+def test_context_resolution_has_no_filesystem_side_effects(tmp_path: Path) -> None:
+    root = tmp_path / "radiotedu-fr"
+    profile = replace(
+        load_station_profiles("config/stations")["radiotedu-fr"],
+        runtime=RuntimeProfile(
+            str(root),
+            str(root / "radio.db"),
+            str(tmp_path / "media" / "radiotedu-fr"),
+            str(root / "announcements"),
+            str(root / "qwen-cache"),
+            str(root / "logs"),
+        ),
+    )
+
+    context = build_station_context(Settings(), profile)
+
+    assert context.data_root == root.resolve()
+    assert context.database_file == (root / "radio.db").resolve()
+    assert context.music_root == (tmp_path / "media" / "radiotedu-fr").resolve()
+    assert context.announcement_root == (root / "announcements").resolve()
+    assert context.cache_root == (root / "qwen-cache").resolve()
+    assert context.log_root == (root / "logs").resolve()
+    assert not root.exists()
+    assert not (tmp_path / "media").exists()
+
+
+def test_runtime_directories_are_created_only_by_explicit_ensure(tmp_path: Path) -> None:
+    root = tmp_path / "station"
+    profile = replace(
+        make_profile(),
+        runtime=RuntimeProfile(
+            str(root),
+            str(root / "radio.db"),
+            str(tmp_path / "music"),
+            str(root / "announcements"),
+            str(root / "qwen-cache"),
+            str(root / "logs"),
+        ),
+    )
+    context = build_station_context(Settings(), profile)
+    assert not root.exists()
+
+    ensure_station_runtime_dirs(context)
+
+    assert context.data_root.is_dir()
+    assert context.database_file.parent.is_dir()
+    assert context.music_root.is_dir()
+    assert context.announcement_root.is_dir()
+    assert context.cache_root.is_dir()
+    assert context.log_root.is_dir()
+
+
+def test_english_compatibility_adapter_preserves_direct_settings() -> None:
+    settings = Settings(
+        database_path="legacy/radio.db",
+        music_dir="legacy/music",
+        static_dir="legacy/static",
+        public_stream_url="https://example.test/legacy",
+        min_ready_announcements=3,
+    )
+
+    context = english_compatibility_context(settings)
+
+    assert context.settings is settings
+    assert context.profile.station_id == "radiotedu-en"
+    assert context.profile.language == "en"
+    assert context.profile.locale == "en-US"
+    assert context.profile.public.route == "/ai/en"
+    assert context.profile.public.compatibility_routes == ("/ai",)
+    assert context.profile.public.stream_url == settings.public_stream_url
+    assert context.profile.audio.minimum_qwen_buffer == 5
+    assert coerce_station_context(settings).settings is settings
+    assert coerce_station_context(context) is context
+
+
+def test_station_context_is_frozen() -> None:
+    context = english_compatibility_context(Settings())
+    with pytest.raises(FrozenInstanceError):
+        context.profile = make_profile("radiotedu-fr")  # type: ignore[misc]
+
+
+def test_station_selectors_load_from_environment_file(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "STATION_ID=radiotedu-fr\nSTATION_PROFILES_DIR=private/stations\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings.from_env(env_file)
+
+    assert settings.station_id == "radiotedu-fr"
+    assert settings.station_profiles_dir == "private/stations"
+    assert settings.station_profiles_path == Path("private/stations")
 
 
 def test_canonical_profiles_have_frozen_identity() -> None:

@@ -28,6 +28,8 @@ def _as_bool(value: str) -> bool:
 
 @dataclass
 class Settings:
+    station_id: str = "radiotedu-en"
+    station_profiles_dir: str = "config/stations"
     database_path: str = "data/radiotedu.db"
     music_dir: str = "data/music"
     static_dir: str = "backend/static"
@@ -87,6 +89,8 @@ class Settings:
         env_file = _env_file_values(Path(env_path))
         values: dict[str, object] = {}
         key_map = {
+            "station_id": "STATION_ID",
+            "station_profiles_dir": "STATION_PROFILES_DIR",
             "database_path": "DATABASE_PATH",
             "music_dir": "MUSIC_DIR",
             "static_dir": "STATIC_DIR",
@@ -166,6 +170,10 @@ class Settings:
 
     def path(self, value: str) -> Path:
         return Path(value).expanduser()
+
+    @property
+    def station_profiles_path(self) -> Path:
+        return self.path(self.station_profiles_dir)
 
     @property
     def database_file(self) -> Path:
