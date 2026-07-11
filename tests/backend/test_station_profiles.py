@@ -165,6 +165,88 @@ def test_scalar_values_are_not_coerced(tmp_path: Path) -> None:
         load_station_profile(_write_profile(tmp_path, "coerced.json", raw))
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "display_name",
+        "language_locale",
+        "public_route",
+        "compatibility_routes",
+        "snapshot_endpoint",
+        "status_endpoint",
+        "stream_url",
+        "stream_mount",
+        "minimum_qwen_buffer",
+        "music_root",
+        "voice_pack",
+        "snapshot_secret_ref",
+    ],
+)
+def test_frozen_station_identity_rejects_mixed_or_alternate_values(tmp_path: Path, mutation: str) -> None:
+    raw = _canonical_raw("radiotedu-en")
+    public = raw["public"]
+    audio = raw["audio"]
+    runtime = raw["runtime"]
+    assert isinstance(public, dict)
+    assert isinstance(audio, dict)
+    assert isinstance(runtime, dict)
+    mutations = {
+        "display_name": lambda: raw.__setitem__("display_name", "RadioTEDU English"),
+        "language_locale": lambda: (raw.__setitem__("language", "fr"), raw.__setitem__("locale", "fr-FR")),
+        "public_route": lambda: public.__setitem__("route", "/ai/english"),
+        "compatibility_routes": lambda: public.__setitem__("compatibility_routes", []),
+        "snapshot_endpoint": lambda: public.__setitem__("snapshot_endpoint", "/api/public/stations/radiotedu-en/other"),
+        "status_endpoint": lambda: public.__setitem__("status_endpoint", "/api/public/stations/radiotedu-en/other"),
+        "stream_url": lambda: public.__setitem__("stream_url", "https://radiotedu.com:8001/other"),
+        "stream_mount": lambda: audio.__setitem__("stream_mount", "/radiotedu-en-alt"),
+        "minimum_qwen_buffer": lambda: audio.__setitem__("minimum_qwen_buffer", 6),
+        "music_root": lambda: runtime.__setitem__("music_root", "media/stations/radiotedu-en/alternate"),
+        "voice_pack": lambda: raw.__setitem__("voice_pack", "radiotedu-en-voices-v2"),
+        "snapshot_secret_ref": lambda: raw.__setitem__("snapshot_secret_ref", "RADIOTEDU_EN_OTHER_SECRET"),
+    }
+    mutations[mutation]()
+
+    with pytest.raises(StationProfileError, match="frozen identity"):
+        load_station_profile(_write_profile(tmp_path, f"mixed-{mutation}.json", raw))
+
+
+def test_regex_valid_but_unsupported_station_id_is_rejected(tmp_path: Path) -> None:
+    raw = _canonical_raw("radiotedu-en")
+    raw["station_id"] = "radiotedu-de"
+
+    with pytest.raises(StationProfileError, match="unsupported station_id"):
+        load_station_profile(_write_profile(tmp_path, "radiotedu-de.json", raw))
+
+
+def test_profile_directory_requires_both_canonical_stations(tmp_path: Path) -> None:
+    _write_profile(tmp_path, "radiotedu-en.json", _canonical_raw("radiotedu-en"))
+
+    with pytest.raises(StationProfileError, match="profile set must contain exactly"):
+        load_station_profiles(tmp_path)
+
+
+def test_profile_directory_rejects_empty_and_extra_sets(tmp_path: Path) -> None:
+    with pytest.raises(StationProfileError, match="profile set must contain exactly"):
+        load_station_profiles(tmp_path)
+
+    _write_profile(tmp_path, "radiotedu-en.json", _canonical_raw("radiotedu-en"))
+    _write_profile(tmp_path, "radiotedu-fr.json", _canonical_raw("radiotedu-fr"))
+    extra = json.loads(
+        json.dumps(_canonical_raw("radiotedu-en"))
+        .replace("radiotedu-en", "radiotedu-de")
+        .replace("RADIOTEDU_EN", "RADIOTEDU_DE")
+    )
+    extra["display_name"] = "RadioTEDU Deutsch"
+    extra_public = extra["public"]
+    assert isinstance(extra_public, dict)
+    extra_public["route"] = "/ai/de"
+    extra_public["compatibility_routes"] = []
+    _write_profile(tmp_path, "radiotedu-de.json", extra)
+
+    with pytest.raises(StationProfileError, match="unsupported station_id|profile set must contain exactly"):
+        load_station_profiles(tmp_path)
+
+
 def test_duplicate_station_ids_are_rejected(tmp_path: Path) -> None:
     raw = _canonical_raw()
     _write_profile(tmp_path, "one.json", raw)
@@ -174,29 +256,83 @@ def test_duplicate_station_ids_are_rejected(tmp_path: Path) -> None:
         load_station_profiles(tmp_path)
 
 
-@pytest.mark.parametrize(
-    ("section", "field", "message"),
-    [
-        ("runtime", "database", "duplicate database"),
-        (None, "snapshot_secret_ref", "duplicate secret_ref"),
-    ],
-)
-def test_profiles_cannot_share_runtime_paths_or_secrets(
-    tmp_path: Path,
-    section: str | None,
-    field: str,
-    message: str,
-) -> None:
+def _set_runtime_tree(raw: dict[str, object], data_root: str) -> None:
+    runtime = raw["runtime"]
+    assert isinstance(runtime, dict)
+    root = data_root.rstrip("/\\")
+    runtime.update(
+        {
+            "data_root": root,
+            "database": f"{root}/radio.db",
+            "announcement_root": f"{root}/announcements",
+            "cache_root": f"{root}/qwen-cache",
+            "log_root": f"{root}/logs",
+        }
+    )
+
+
+def test_cross_field_writable_path_alias_is_rejected(tmp_path: Path) -> None:
     english = _canonical_raw("radiotedu-en")
     french = _canonical_raw("radiotedu-fr")
-    if section is None:
-        french[field] = english[field]
-    else:
-        english_section = english[section]
-        assert isinstance(english_section, dict)
-        french[section] = dict(english_section)
+    root = (tmp_path / "shared").as_posix()
+    _set_runtime_tree(english, root)
+    _set_runtime_tree(french, f"{root}/radio.db")
     _write_profile(tmp_path, "radiotedu-en.json", english)
     _write_profile(tmp_path, "radiotedu-fr.json", french)
 
-    with pytest.raises(StationProfileError, match=message):
+    with pytest.raises(StationProfileError, match="writable path overlap"):
+        load_station_profiles(tmp_path)
+
+
+def test_cross_station_ancestor_descendant_writable_paths_are_rejected(tmp_path: Path) -> None:
+    english = _canonical_raw("radiotedu-en")
+    french = _canonical_raw("radiotedu-fr")
+    root = (tmp_path / "ancestor").as_posix()
+    _set_runtime_tree(english, root)
+    _set_runtime_tree(french, f"{root}/radio.db/archive")
+    _write_profile(tmp_path, "radiotedu-en.json", english)
+    _write_profile(tmp_path, "radiotedu-fr.json", french)
+
+    with pytest.raises(StationProfileError, match="writable path overlap"):
+        load_station_profiles(tmp_path)
+
+
+def test_windows_case_alias_between_station_paths_is_rejected(tmp_path: Path) -> None:
+    english = _canonical_raw("radiotedu-en")
+    french = _canonical_raw("radiotedu-fr")
+    _set_runtime_tree(english, "C:/RadioTEDU/ProfileA")
+    _set_runtime_tree(french, "c:/radiotedu/profilea/RADIO.DB")
+    _write_profile(tmp_path, "radiotedu-en.json", english)
+    _write_profile(tmp_path, "radiotedu-fr.json", french)
+
+    with pytest.raises(StationProfileError, match="writable path overlap"):
+        load_station_profiles(tmp_path)
+
+
+def test_station_writable_children_must_be_strict_descendants(tmp_path: Path) -> None:
+    raw = _canonical_raw("radiotedu-en")
+    runtime = raw["runtime"]
+    assert isinstance(runtime, dict)
+    runtime["database"] = runtime["data_root"]
+
+    with pytest.raises(StationProfileError, match="strictly beneath runtime.data_root"):
+        load_station_profile(_write_profile(tmp_path, "equal-root.json", raw))
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["database", "data_root", "music_root", "announcement_root", "cache_root", "log_root"],
+)
+def test_each_named_writable_field_collision_is_rejected(tmp_path: Path, field: str) -> None:
+    english = _canonical_raw("radiotedu-en")
+    french = _canonical_raw("radiotedu-fr")
+    english_runtime = english["runtime"]
+    french_runtime = french["runtime"]
+    assert isinstance(english_runtime, dict)
+    assert isinstance(french_runtime, dict)
+    french_runtime[field] = english_runtime[field]
+    _write_profile(tmp_path, "radiotedu-en.json", english)
+    _write_profile(tmp_path, "radiotedu-fr.json", french)
+
+    with pytest.raises(StationProfileError):
         load_station_profiles(tmp_path)
