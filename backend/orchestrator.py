@@ -6,6 +6,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .announcements.models import AnnouncementJob
 from .config import Settings
 from .database import connect, init_db, log_event, now_iso
 from .llm import ollama_runtime_status
@@ -132,6 +133,23 @@ class AutonomousOrchestrator:
             conn.commit()
         reply = self.agent.queue_listener_reply(content, clean_source)
         return {"stored": True, "reply_queued": bool(reply.get("queued")), "reply": reply}
+
+    def enqueue_announcement_job(
+        self,
+        job: AnnouncementJob,
+        *,
+        dispatch_rule: str,
+        dispatch_inputs: dict[str, object],
+    ) -> dict:
+        """Accept only this station's queued dispatch intent without invoking AI."""
+
+        if job.station_id != self.context.profile.station_id or job.language.casefold() != self.context.profile.language.casefold():
+            raise ValueError("announcement job does not belong to this orchestrator")
+        return self.agent.enqueue_announcement_job(
+            job,
+            dispatch_rule=dispatch_rule,
+            dispatch_inputs=dispatch_inputs,
+        )
 
     def tick(self) -> dict:
         init_db(self._database_runtime)

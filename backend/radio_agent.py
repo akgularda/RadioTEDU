@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from .config import Settings
+from .announcements.models import AnnouncementJob
 from .database import connect, init_db, log_event, now_iso, rows_to_dicts
 from .llm import choose_track_with_llm, ollama_runtime_status
 from .playback import PlaybackController, QueueItem
@@ -81,6 +83,50 @@ class RadioAgent:
             log_event(conn, "info", "User message queued.")
             conn.commit()
         return {"queued": True, "file_path": clip_path}
+
+    def enqueue_announcement_job(
+        self,
+        job: AnnouncementJob,
+        *,
+        dispatch_rule: str,
+        dispatch_inputs: dict[str, object],
+    ) -> dict:
+        """Record station-local dispatch intent without starting model work inline."""
+
+        if job.station_id != self.context.profile.station_id or job.language.casefold() != self.context.profile.language.casefold():
+            raise ValueError("announcement job does not belong to this radio agent")
+        metadata_json = json.dumps(dispatch_inputs, sort_keys=True, separators=(",", ":"))
+        with connect(self._database_runtime) as conn:
+            row = conn.execute(
+                "select state from announcement_jobs where station_id = ? and job_id = ?",
+                (job.station_id, job.job_id),
+            ).fetchone()
+            event_recorded = row is not None
+            if event_recorded:
+                conn.execute(
+                    """
+                    insert into announcement_job_events (
+                        event_id, job_id, from_state, to_state, actor, reason, metadata_json, occurred_at
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(uuid4()),
+                        job.job_id,
+                        row["state"],
+                        row["state"],
+                        "bilingual-dispatcher",
+                        dispatch_rule,
+                        metadata_json,
+                        now_iso(),
+                    ),
+                )
+                conn.commit()
+        return {
+            "queued": True,
+            "job_id": job.job_id,
+            "station_id": job.station_id,
+            "event_recorded": event_recorded,
+        }
 
     def queue_listener_reply(self, feedback: str, source: str = "dashboard") -> dict:
         safe_feedback = " ".join(feedback.strip().split())[:180]
