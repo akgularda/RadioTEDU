@@ -4,6 +4,7 @@ import json
 import re
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from .config import Settings
 from .database import connect, init_db, log_event, now_iso
@@ -22,9 +23,43 @@ NONFINANCIAL_GUARD = re.compile(
 )
 
 
+def _normalized_runtime_identity(context: StationContext) -> tuple[Path, ...]:
+    return (
+        context.database_file,
+        context.data_root,
+        context.music_root,
+        context.announcement_root,
+        context.cache_root,
+        context.log_root,
+    )
+
+
+def _validate_agent_runtime_pair(
+    runtime: Settings | StationContext,
+    context: StationContext,
+    agent: RadioAgent,
+) -> None:
+    agent_context = getattr(agent, "context", None)
+    if not isinstance(agent_context, StationContext):
+        raise ValueError("station runtime and agent context mismatch")
+    if isinstance(runtime, StationContext):
+        if agent_context is not runtime:
+            raise ValueError("station runtime and agent context mismatch")
+        return
+    if (
+        type(agent_context) is not type(context)
+        or context.profile.station_id != "radiotedu-en"
+        or agent_context.profile.station_id != "radiotedu-en"
+        or _normalized_runtime_identity(agent_context) != _normalized_runtime_identity(context)
+    ):
+        raise ValueError("station runtime and agent context mismatch")
+
+
 class AutonomousOrchestrator:
     def __init__(self, runtime: Settings | StationContext, agent: RadioAgent) -> None:
-        self.context = coerce_station_context(runtime)
+        context = coerce_station_context(runtime)
+        _validate_agent_runtime_pair(runtime, context, agent)
+        self.context = context
         self.settings = self.context.settings
         self._database_runtime: Settings | StationContext = (
             self.context if isinstance(runtime, StationContext) else self.settings

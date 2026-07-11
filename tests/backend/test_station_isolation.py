@@ -460,12 +460,24 @@ def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp
     )
 
     agent = radio_agent_module.RadioAgent(settings)
-    agent._narrate("Legacy context", "morning_signal")
     orchestrator = orchestrator_module.AutonomousOrchestrator(settings, agent)
+    agent_context = agent.context
+    orchestrator_context = orchestrator.context
+    settings.station_id = "radiotedu-fr"
+    settings.database_path = str(tmp_path / "mutated" / "radio.db")
+    settings.music_dir = str(tmp_path / "mutated" / "music")
+
+    agent._narrate("Legacy context", "morning_signal")
     orchestrator.stop_background()
 
+    assert agent.context is agent_context
+    assert orchestrator.context is orchestrator_context
     assert agent.context.profile.station_id == "radiotedu-en"
     assert orchestrator.context.profile.station_id == "radiotedu-en"
+    assert agent.settings.station_id == "radiotedu-en"
+    assert orchestrator.settings.station_id == "radiotedu-en"
+    assert agent.settings.database_path.endswith("legacy\\radio.db") or agent.settings.database_path.endswith("legacy/radio.db")
+    assert orchestrator.settings.database_path.endswith("legacy\\radio.db") or orchestrator.settings.database_path.endswith("legacy/radio.db")
     assert agent.settings is not settings
     assert orchestrator.settings is not settings
     assert initialized == [agent.settings]
@@ -474,3 +486,111 @@ def test_direct_settings_keep_a_narrow_legacy_database_and_scheduler_runtime(tmp
     assert schedule_calls == [agent.settings]
     assert agent_connect_calls == [agent.settings]
     assert orchestrator_connect_calls == [orchestrator.settings]
+
+
+def _agent_without_constructor(context: StationContext):
+    from backend.radio_agent import RadioAgent
+
+    agent = object.__new__(RadioAgent)
+    agent.context = context
+    agent.settings = context.settings
+    agent._database_runtime = context
+    return agent
+
+
+def _assert_orchestrator_pair_rejected_before_side_effects(runtime, agent, monkeypatch) -> None:
+    from backend import orchestrator as orchestrator_module
+
+    side_effects = []
+
+    class StubEvent:
+        def __init__(self):
+            side_effects.append("thread-event")
+
+    class StubPusher:
+        def __init__(self, settings, selected_agent):
+            side_effects.append("public-pusher")
+
+    def forbidden_database(*args, **kwargs):
+        side_effects.append("database")
+        raise AssertionError("database work must not start for a mismatched pair")
+
+    monkeypatch.setattr(orchestrator_module.threading, "Event", StubEvent)
+    monkeypatch.setattr(orchestrator_module, "PublicSnapshotPusher", StubPusher)
+    monkeypatch.setattr(orchestrator_module, "connect", forbidden_database)
+    monkeypatch.setattr(orchestrator_module, "init_db", forbidden_database)
+
+    with pytest.raises(ValueError, match="station runtime and agent context mismatch"):
+        orchestrator_module.AutonomousOrchestrator(runtime, agent)
+
+    assert side_effects == []
+
+
+def test_orchestrator_rejects_french_context_with_english_agent_before_side_effects(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stations = contexts(tmp_path)
+    _assert_orchestrator_pair_rejected_before_side_effects(
+        stations["radiotedu-fr"],
+        _agent_without_constructor(stations["radiotedu-en"]),
+        monkeypatch,
+    )
+
+
+def test_orchestrator_rejects_equivalent_but_different_explicit_context_before_side_effects(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    context = contexts(tmp_path)["radiotedu-fr"]
+    equivalent = build_station_context(context.settings, context.profile)
+    assert equivalent == context
+    assert equivalent is not context
+
+    _assert_orchestrator_pair_rejected_before_side_effects(
+        context,
+        _agent_without_constructor(equivalent),
+        monkeypatch,
+    )
+
+
+def test_legacy_orchestrator_rejects_explicit_french_agent_before_side_effects(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = Settings(
+        database_path=str(tmp_path / "legacy" / "radio.db"),
+        music_dir=str(tmp_path / "legacy" / "music"),
+        static_dir=str(tmp_path / "legacy" / "static"),
+    )
+    french = contexts(tmp_path)["radiotedu-fr"]
+
+    _assert_orchestrator_pair_rejected_before_side_effects(
+        settings,
+        _agent_without_constructor(french),
+        monkeypatch,
+    )
+
+
+def test_legacy_orchestrator_rejects_english_agent_with_different_database_identity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from backend.stations.context import coerce_station_context
+
+    orchestrator_settings = Settings(
+        database_path=str(tmp_path / "orchestrator" / "radio.db"),
+        music_dir=str(tmp_path / "orchestrator" / "music"),
+        static_dir=str(tmp_path / "orchestrator" / "static"),
+    )
+    agent_settings = Settings(
+        database_path=str(tmp_path / "agent" / "radio.db"),
+        music_dir=str(tmp_path / "agent" / "music"),
+        static_dir=str(tmp_path / "agent" / "static"),
+    )
+
+    _assert_orchestrator_pair_rejected_before_side_effects(
+        orchestrator_settings,
+        _agent_without_constructor(coerce_station_context(agent_settings)),
+        monkeypatch,
+    )
