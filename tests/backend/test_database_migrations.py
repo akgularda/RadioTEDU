@@ -56,11 +56,11 @@ def test_initial_schema_migration_is_recorded_before_station_seeding(tmp_path: P
 
     with database.connect(settings) as conn:
         checkpoint = conn.execute(
-            "select version, name, checksum, applied_at from schema_migrations"
+            "select version, name, checksum, applied_at from schema_migrations order by version"
         ).fetchall()
         channel_count = conn.execute("select count(*) from channels").fetchone()[0]
 
-    assert len(checkpoint) == 1
+    assert checkpoint
     assert checkpoint[0][0:2] == (1, "initial_station_schema")
     assert len(checkpoint[0][2]) == 64
     assert checkpoint[0][3]

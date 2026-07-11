@@ -760,6 +760,41 @@ create index if not exists idx_aircheck_reports_station_window
 """
 
 
+PROGRAM_CLOCK_SCHEMA = """
+create table if not exists station_clocks (
+    clock_id text primary key,
+    station_id text not null,
+    name text not null,
+    daypart text not null,
+    timezone_name text not null,
+    version integer not null,
+    effective_from text not null,
+    effective_until text,
+    active integer not null check(active in (0, 1)),
+    checksum text not null,
+    unique(station_id, daypart, version)
+);
+
+create table if not exists clock_positions (
+    position_id text primary key,
+    clock_id text not null references station_clocks(clock_id) on delete restrict,
+    ordinal integer not null,
+    offset_seconds integer not null,
+    item_kind text not null,
+    category text not null,
+    boundary_kind text not null,
+    maximum_lateness_seconds integer not null,
+    rules_json text not null,
+    unique(clock_id, ordinal)
+);
+
+create index if not exists idx_station_clocks_active_lookup
+    on station_clocks(station_id, daypart, active, effective_from, effective_until, version);
+create index if not exists idx_clock_positions_clock_ordinal
+    on clock_positions(clock_id, ordinal);
+"""
+
+
 DEFAULT_MIGRATIONS = (
     Migration(
         1,
@@ -783,5 +818,12 @@ DEFAULT_MIGRATIONS = (
         AIRCHECK_REPORT_SCHEMA,
         required_columns=_schema_column_requirements(AIRCHECK_REPORT_SCHEMA),
         schema_contract=_schema_contract(AIRCHECK_REPORT_SCHEMA),
+    ),
+    Migration(
+        4,
+        "create_station_program_clocks",
+        PROGRAM_CLOCK_SCHEMA,
+        required_columns=_schema_column_requirements(PROGRAM_CLOCK_SCHEMA),
+        schema_contract=_schema_contract(PROGRAM_CLOCK_SCHEMA),
     ),
 )
