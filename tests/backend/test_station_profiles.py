@@ -278,6 +278,37 @@ def test_english_compatibility_adapter_preserves_direct_settings() -> None:
     assert coerce_station_context(context) is context
 
 
+def test_english_compatibility_normalizes_copied_selector_without_mutating_caller() -> None:
+    settings = Settings(station_id="radiotedu-fr")
+
+    direct = english_compatibility_context(settings)
+    coerced = coerce_station_context(settings)
+
+    assert settings.station_id == "radiotedu-fr"
+    for context in (direct, coerced):
+        assert context.settings is not settings
+        assert context.settings.station_id == "radiotedu-en"
+        assert context.profile.station_id == "radiotedu-en"
+        assert context.settings.station_id == context.profile.station_id
+
+
+def test_compatibility_containment_mode_cannot_flip_after_settings_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    context = english_compatibility_context(Settings())
+    context.settings.public_stream_url = "https://example.test/changed-after-construction"
+
+    ensure_station_runtime_dirs(context)
+
+    assert context.data_root == (tmp_path / "data").resolve()
+    assert context.music_root == (tmp_path / "data" / "music").resolve()
+    assert context.announcement_root == (
+        tmp_path / "backend" / "static" / "generated" / "tts"
+    ).resolve()
+
+
 def test_english_compatibility_runtime_keeps_legacy_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

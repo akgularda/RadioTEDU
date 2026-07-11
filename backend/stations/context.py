@@ -37,6 +37,11 @@ class StationContext:
         return self.settings.path(self.profile.runtime.log_root).resolve()
 
 
+@dataclass(frozen=True, slots=True)
+class _EnglishCompatibilityContext(StationContext):
+    pass
+
+
 def build_station_context(settings: Settings, profile: StationProfile) -> StationContext:
     data_root = Path(profile.runtime.data_root)
     scoped = replace(
@@ -95,8 +100,8 @@ def _english_compatibility_profile(settings: Settings) -> StationProfile:
 
 
 def english_compatibility_context(settings: Settings) -> StationContext:
-    scoped = replace(settings)
-    return StationContext(scoped, _english_compatibility_profile(scoped))
+    scoped = replace(settings, station_id="radiotedu-en")
+    return _EnglishCompatibilityContext(scoped, _english_compatibility_profile(scoped))
 
 
 def coerce_station_context(value: Settings | StationContext) -> StationContext:
@@ -179,8 +184,7 @@ def _validate_canonical_runtime_paths(
 def _validate_station_runtime_paths(context: StationContext) -> None:
     deployment_root = Path.cwd().resolve()
     targets = _resolved_runtime_directories(context)
-    legacy_profile = _english_compatibility_profile(context.settings)
-    if context.profile == legacy_profile:
+    if isinstance(context, _EnglishCompatibilityContext):
         _validate_legacy_runtime_paths(context, deployment_root, targets)
     else:
         _validate_canonical_runtime_paths(context, deployment_root, targets)
