@@ -1,6 +1,8 @@
 from dataclasses import FrozenInstanceError, replace
 import json
+import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -94,29 +96,158 @@ def test_context_resolution_has_no_filesystem_side_effects(tmp_path: Path) -> No
 
 
 def test_runtime_directories_are_created_only_by_explicit_ensure(tmp_path: Path) -> None:
-    root = tmp_path / "station"
+    deployment_root = tmp_path / "deployment"
+    deployment_root.mkdir()
+    root = deployment_root / "data" / "stations" / "radiotedu-en"
     profile = replace(
         make_profile(),
         runtime=RuntimeProfile(
-            str(root),
-            str(root / "radio.db"),
-            str(tmp_path / "music"),
-            str(root / "announcements"),
-            str(root / "qwen-cache"),
-            str(root / "logs"),
+            "data/stations/radiotedu-en",
+            "data/stations/radiotedu-en/radio.db",
+            "media/stations/radiotedu-en/music",
+            "data/stations/radiotedu-en/announcements",
+            "data/stations/radiotedu-en/qwen-cache",
+            "data/stations/radiotedu-en/logs",
         ),
     )
-    context = build_station_context(Settings(), profile)
-    assert not root.exists()
+    previous = Path.cwd()
+    os.chdir(deployment_root)
+    try:
+        context = build_station_context(Settings(), profile)
+        assert not root.exists()
 
-    ensure_station_runtime_dirs(context)
+        ensure_station_runtime_dirs(context)
 
-    assert context.data_root.is_dir()
-    assert context.database_file.parent.is_dir()
-    assert context.music_root.is_dir()
-    assert context.announcement_root.is_dir()
-    assert context.cache_root.is_dir()
-    assert context.log_root.is_dir()
+        assert context.data_root.is_dir()
+        assert context.database_file.parent.is_dir()
+        assert context.music_root.is_dir()
+        assert context.announcement_root.is_dir()
+        assert context.cache_root.is_dir()
+        assert context.log_root.is_dir()
+    finally:
+        os.chdir(previous)
+
+
+def _context_with_runtime(profile: StationProfile, runtime: RuntimeProfile) -> StationContext:
+    return build_station_context(Settings(), replace(profile, runtime=runtime))
+
+
+@pytest.mark.parametrize("data_root", ["../escape", "ABSOLUTE_ESCAPE"])
+def test_runtime_ensure_rejects_data_root_escape_without_partial_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    data_root: str,
+) -> None:
+    deployment_root = tmp_path / "deployment"
+    deployment_root.mkdir()
+    monkeypatch.chdir(deployment_root)
+    escaped = tmp_path / "escape"
+    selected_root = str(escaped.resolve()) if data_root == "ABSOLUTE_ESCAPE" else data_root
+    runtime = RuntimeProfile(
+        selected_root,
+        f"{selected_root}/radio.db",
+        "media/stations/radiotedu-en/music",
+        f"{selected_root}/announcements",
+        f"{selected_root}/qwen-cache",
+        f"{selected_root}/logs",
+    )
+    context = _context_with_runtime(make_profile(), runtime)
+
+    with pytest.raises(ValueError, match="data_root.*deployment root"):
+        ensure_station_runtime_dirs(context)
+
+    assert not escaped.exists()
+    assert not (deployment_root / "media").exists()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("database_path", "../escape/radio.db"),
+        ("music_dir", "../escape/music"),
+        ("static_dir", "../escape/static"),
+        ("rss_feeds_path", "../escape/rss.json"),
+        ("liquidsoap_queue_path", "../escape/queue.m3u"),
+        ("liquidsoap_script_path", "../escape/radio.liq"),
+    ],
+)
+def test_runtime_ensure_validates_every_settings_target_before_writing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: str,
+) -> None:
+    deployment_root = tmp_path / "deployment"
+    deployment_root.mkdir()
+    monkeypatch.chdir(deployment_root)
+    profiles_dir = Path(__file__).resolve().parents[2] / "config" / "stations"
+    context = build_station_context(Settings(), load_station_profiles(profiles_dir)["radiotedu-en"])
+    setattr(context.settings, field, value)
+
+    with pytest.raises(ValueError, match="runtime path"):
+        ensure_station_runtime_dirs(context)
+
+    assert not (tmp_path / "escape").exists()
+    assert not (deployment_root / "data").exists()
+    assert not (deployment_root / "media").exists()
+
+
+def _create_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            pytest.fail(f"could not create test junction: {result.stderr or result.stdout}")
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def test_runtime_ensure_rejects_existing_link_escape_before_partial_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment_root = tmp_path / "deployment"
+    station_root = deployment_root / "data" / "stations" / "radiotedu-en"
+    outside = tmp_path / "outside"
+    station_root.mkdir(parents=True)
+    outside.mkdir()
+    _create_directory_link(station_root / "announcements", outside)
+    monkeypatch.chdir(deployment_root)
+    profiles_dir = Path(__file__).resolve().parents[2] / "config" / "stations"
+    context = build_station_context(Settings(), load_station_profiles(profiles_dir)["radiotedu-en"])
+
+    with pytest.raises(ValueError, match="announcement.*data_root"):
+        ensure_station_runtime_dirs(context)
+
+    assert list(outside.iterdir()) == []
+    assert not (station_root / "qwen-cache").exists()
+    assert not (station_root / "logs").exists()
+    assert not (deployment_root / "media").exists()
+
+
+def test_runtime_ensure_rejects_music_link_escape_before_partial_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment_root = tmp_path / "deployment"
+    music_parent = deployment_root / "media" / "stations" / "radiotedu-en"
+    outside = tmp_path / "outside-music"
+    music_parent.mkdir(parents=True)
+    outside.mkdir()
+    _create_directory_link(music_parent / "music", outside)
+    monkeypatch.chdir(deployment_root)
+    profiles_dir = Path(__file__).resolve().parents[2] / "config" / "stations"
+    context = build_station_context(Settings(), load_station_profiles(profiles_dir)["radiotedu-en"])
+
+    with pytest.raises(ValueError, match="music.*deployment root"):
+        ensure_station_runtime_dirs(context)
+
+    assert list(outside.iterdir()) == []
+    assert not (deployment_root / "data").exists()
 
 
 def test_english_compatibility_adapter_preserves_direct_settings() -> None:
@@ -130,7 +261,8 @@ def test_english_compatibility_adapter_preserves_direct_settings() -> None:
 
     context = english_compatibility_context(settings)
 
-    assert context.settings is settings
+    assert context.settings is not settings
+    assert context.settings == settings
     assert context.profile.station_id == "radiotedu-en"
     assert context.profile.language == "en"
     assert context.profile.locale == "en-US"
@@ -138,8 +270,32 @@ def test_english_compatibility_adapter_preserves_direct_settings() -> None:
     assert context.profile.public.compatibility_routes == ("/ai",)
     assert context.profile.public.stream_url == settings.public_stream_url
     assert context.profile.audio.minimum_qwen_buffer == 5
-    assert coerce_station_context(settings).settings is settings
+    coerced = coerce_station_context(settings)
+    assert coerced.settings is not settings
+    settings.database_path = "mutated/radio.db"
+    assert context.settings.database_path == "legacy/radio.db"
+    assert coerced.settings.database_path == "legacy/radio.db"
     assert coerce_station_context(context) is context
+
+
+def test_english_compatibility_runtime_keeps_legacy_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    context = english_compatibility_context(Settings())
+
+    ensure_station_runtime_dirs(context)
+
+    assert context.database_file == (tmp_path / "data" / "radiotedu.db").resolve()
+    assert context.music_root == (tmp_path / "data" / "music").resolve()
+    assert context.announcement_root == (
+        tmp_path / "backend" / "static" / "generated" / "tts"
+    ).resolve()
+    assert context.cache_root == (
+        tmp_path / "backend" / "static" / "generated" / "tts" / "qwen-cache"
+    ).resolve()
+    assert context.log_root == (tmp_path / "data" / "logs").resolve()
 
 
 def test_station_context_is_frozen() -> None:
@@ -160,6 +316,30 @@ def test_station_selectors_load_from_environment_file(tmp_path: Path) -> None:
     assert settings.station_id == "radiotedu-fr"
     assert settings.station_profiles_dir == "private/stations"
     assert settings.station_profiles_path == Path("private/stations")
+
+
+@pytest.mark.parametrize("station_id", ["radiotedu-de", "", "RadioTEDU-EN"])
+def test_direct_settings_reject_unknown_station_selector(station_id: str) -> None:
+    with pytest.raises(ValueError, match="station_id must be radiotedu-en or radiotedu-fr"):
+        Settings(station_id=station_id)
+
+
+def test_environment_file_rejects_unknown_station_selector(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("STATION_ID=radiotedu-de\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="station_id must be radiotedu-en or radiotedu-fr"):
+        Settings.from_env(env_file)
+
+
+def test_process_environment_rejects_unknown_station_selector(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("STATION_ID", "radiotedu-de")
+
+    with pytest.raises(ValueError, match="station_id must be radiotedu-en or radiotedu-fr"):
+        Settings.from_env(tmp_path / "missing.env")
 
 
 def test_canonical_profiles_have_frozen_identity() -> None:

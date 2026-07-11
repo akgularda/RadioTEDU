@@ -26,6 +26,9 @@ def _as_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+ALLOWED_STATION_IDS = frozenset({"radiotedu-en", "radiotedu-fr"})
+
+
 @dataclass
 class Settings:
     station_id: str = "radiotedu-en"
@@ -83,6 +86,10 @@ class Settings:
     news_enabled: bool = False
     news_interval_minutes: int = 60
     news_max_age_hours: int = 24
+
+    def __post_init__(self) -> None:
+        if self.station_id not in ALLOWED_STATION_IDS:
+            raise ValueError("station_id must be radiotedu-en or radiotedu-fr")
 
     @classmethod
     def from_env(cls, env_path: str | Path = ".env") -> "Settings":
